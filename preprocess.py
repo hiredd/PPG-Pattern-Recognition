@@ -24,7 +24,7 @@ for file_id, file_name in enumerate(listdir(files_path)):
     print(file_device_id)
 
     timestamp = datetime.strptime("2016:" + ":".join(filename_components[:2]) + ":9", "%Y:%m:%d:%H")
-
+    
     with open(files_path + "/" + file_name) as f:
         content = f.readlines()
 
@@ -36,7 +36,7 @@ for file_id, file_name in enumerate(listdir(files_path)):
 
             # add an if for "!" - new write to file on spansion memory
             if(content[li].strip() == "!"):
-                data.append(["0" for _ in np.zeros(6)])
+            #    data.append(["0" for _ in np.zeros(6)])
                 li += 1
 
             datapoint = {"P": -1, "A": -1}
@@ -45,7 +45,7 @@ for file_id, file_name in enumerate(listdir(files_path)):
             while li < lenC and (setP == False or setA == False):
 
                 if(content[li].strip() == "!"):
-                    data.append(["0" for _ in np.zeros(6)])
+                    #data.append(["0" for _ in np.zeros(6)])
                     should_skip = True
                     break
 
@@ -70,7 +70,7 @@ for file_id, file_name in enumerate(listdir(files_path)):
                          str(datapoint["A"][0]), 
                          str(datapoint["A"][1]), 
                          str(datapoint["A"][2])])
-
+            
             timestamp = timestamp + time_delta
 
     df = pd.DataFrame(data)
