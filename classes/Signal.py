@@ -30,7 +30,11 @@ class Signal:
             return 0
         return i-1
 
-    def extract_features(self, start, end):
+    def extract_features(self, start, end, validate_HR_range = True):
+        if start == None:
+            start = 0
+        if end == None:
+            end = len(self.content)-1
 
         feature_vector = []
 
@@ -55,7 +59,7 @@ class Signal:
         BPM, peak_variance = self.get_BPM_and_peak_variance(start, end)
         feature_vector.append(peak_variance)
 
-        if BPM < 50 or BPM > 120:
+        if validate_HR_range and (BPM < 50 or BPM > 120):
             return None
 
         return feature_vector
