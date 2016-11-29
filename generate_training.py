@@ -16,9 +16,6 @@ import matplotlib.pyplot as plt
 from peakutils.peak import indexes
 from classes.Signal import Signal
 
-def standardize(signal):
-    return preprocessing.scale(signal)
-
 def onclick(event):
     fx, fy = fig.transFigure.inverted().transform((event.x,event.y))
 
@@ -44,7 +41,8 @@ signal.correct_saturation()
 signal.remove_outliers()
 
 step = 256
-start, end = 0, signal.length()
+offset = 128 # 0
+start, end = offset, signal.length()
 features = []
 while start+step < end:
     feature_vector = signal.extract_features(start, start+step)
@@ -60,17 +58,20 @@ features = pd.DataFrame(features).sort_values([2,1,3,0])
 df = pd.read_csv("data/HR_ranges.csv")
 
 review = True
-label_non_HR = True
+label_non_HR = False
 
 if label_non_HR:
-    for i in range(1000):
+    # Randomize (for validation)
+    features.reindex(np.random.permutation(features.index))
+
+    for i in range(500):
         if i >= features.shape[0]:
             break
         feat = features.iloc[i]
         start, end = int(feat[4]), int(feat[5])
         if df.isin([current_file_id, start, end]).all(1).any() == False:
             range_ids = pd.DataFrame([[current_file_id, start, end]])
-            range_ids.to_csv('data/non_HR_ranges.csv', mode='a', header=False, index=False)
+            range_ids.to_csv('data/non_HR_ranges1.csv', mode='a', header=False, index=False)
     quit()
 
 num_figure_subplots = 30
@@ -97,11 +98,11 @@ while num_figure_subplots*k < features.shape[0] and k < 100:
 
         if review:
             if df.isin([current_file_id, start, end]).all(1).any() == False:
-                plt.plot(t, standardize(signal.content[start:end]))
-                plt.plot(t, standardize(signal_filtered), color='r')
+                plt.plot(t, preprocessing.scale(signal.content[start:end]))
+                plt.plot(t, preprocessing.scale(signal_filtered), color='r')
         else:
-            plt.plot(t, standardize(signal.content[start:end]))
-            plt.plot(t, standardize(signal_filtered), color='r')
+            plt.plot(t, preprocessing.scale(signal.content[start:end]))
+            plt.plot(t, preprocessing.scale(signal_filtered), color='r')
 
     cid = fig.canvas.mpl_connect('button_press_event', onclick)
     figManager = plt.get_current_fig_manager()
