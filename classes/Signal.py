@@ -2,6 +2,7 @@ import sys
 import numpy as np
 import pandas as pd
 from scipy.signal import butter, lfilter, freqz, filtfilt, welch, medfilt
+from scipy.fftpack import fft
 from datetime import datetime
 sys.path.append('lib')
 import detect_peaks
@@ -115,6 +116,11 @@ class Signal:
         segment = self.content[start:end].tolist()
         f, psd = welch(segment, fs = self.sample_freq, nperseg = sample_window)
         return f, 10*np.log10(psd)
+
+    def fft(self, length = None):
+        if length == None:
+            return fft(self.content)
+        return fft(self.content, length)
 
 
     # List of log PSDs of the sample_window-sized segments in the signal

@@ -24,18 +24,18 @@ class HRClassifier:
 
         self.model = None
         if NN:
-            self.model_file_name = 'trained_model.h5'
+            self.model_file_name = 'models/trained_model.h5'
             if os.path.exists(self.model_file_name):
                 self.model = load_model(self.model_file_name)
         else:
-            self.model_file_name = 'trained_model.pkl'
+            self.model_file_name = 'models/trained_model.pkl'
             if os.path.exists(self.model_file_name):
                 self.model = joblib.load(self.model_file_name) 
 
 
     def load_data(self):
-        
-        num_data_files = 21
+
+        num_data_files = 20
 
         for range_type in range(2):
 
@@ -69,24 +69,41 @@ class HRClassifier:
 
                     for _,row in ranges[ranges["file_id"] == file_id].iterrows():
                         segment = data.iloc[row["start"]:row["end"]]
-                        s = Signal(segment["ppg"].values, segment["timestamp"].values)
 
-                        if self.only_psds:
-                            f, psd = s.log_PSD()
-                            self.features.append(psd)
-                        else:
-                            self.features.append(s.extract_features(None, None, False))
+                        signals = [Signal(segment["ppg"].values, segment["timestamp"].values)]
 
-                        self.labels.append(range_type)
+                        # Add more positively labeled examples by horizontally flipping
+                        # the signal. The PSD stays the same, but technically different signal.
+                        signals += [Signal(segment["ppg"].iloc[::-1], segment["timestamp"].values)]
+
+                        for s in signals:
+                            if self.only_psds:
+                                f, psd = s.log_PSD()
+                                fft = s.fft(len(f))
+
+                                s.bandpass_filter(0.8, 2.5)
+
+                                f_filtered, psd_filtered = s.log_PSD()
+                                fft_filtered = s.fft(len(f_filtered))
+
+                                #self.features.append([psd, fft, psd_filtered, fft_filtered])
+                                self.features.append(psd_filtered)
+                            else:
+                                self.features.append(s.extract_features(None, None, False))
+
+                            self.labels.append(range_type)
 
         self.features = np.array(self.features)
-        self.features = preprocessing.scale(self.features)
+        #n_samples, n_channels, n_features = self.features.shape
+        #self.features = self.features.reshape(n_samples, n_features, n_channels)
+        #self.features = preprocessing.scale(self.features)
         self.labels = np.array(self.labels)
 
 
     def train(self, train_anyway = False):
         if not train_anyway:
-            assert self.model == None, "A trained model already exists under %s." % self.model_file_name
+            print("A trained model already exists under %s, skipping." % self.model_file_name)
+            return
 
         self.load_data()
 
@@ -108,10 +125,10 @@ class HRClassifier:
         test_y = np_utils.to_categorical(test_y, 2)
 
         # Hyperparameters
+        num_channels = 4
         learning_rate = 10**(-3)
         num_epochs = 20
         batch_size = 32
-        n_inputs, n_input_features = np.shape(train_x)
 
         if self.only_psds:
             l1_dim = 128
@@ -120,7 +137,10 @@ class HRClassifier:
             l1_dim = 8
             l2_dim = 4
 
+        #print(train_x.shape[1], train_x.shape[2])
+
         model = Sequential()
+        #model.add(Flatten(input_shape=(train_x.shape[1], train_x.shape[2])))
         model.add(Dense(128, input_dim=train_x.shape[1], activation="relu"))
         model.add(Dropout(0.2))
         model.add(Dense(32, activation="relu"))
@@ -174,7 +194,7 @@ class HRClassifier:
 
             batch_size = 32
             acc = self.model.predict_proba(np.array([feat_vec]), batch_size=batch_size)
-            acc = acc[0][1]
+            acc = acc[0][0]
 
             ranges.append([acc, (start, start+step)])
 

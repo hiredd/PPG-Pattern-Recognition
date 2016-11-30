@@ -10,4 +10,4 @@ from classes.HRClassifier import HRClassifier
 
 classifier = HRClassifier()
 classifier.train(True)
-classifier.validate(3)
+classifier.validate(20)

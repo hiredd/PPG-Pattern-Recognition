@@ -8,7 +8,7 @@ from os import listdir
 from datetime import datetime, timedelta
 import os.path
 
-files_path = "/home/gal/Downloads/thesis_data"
+files_path = sys.argv[1]
 
 data = []
 data_file_save = "data/data%d.csv"
@@ -17,8 +17,8 @@ data_point_names = "timestamp,device,ppg,accx,accy,accz".split(",")
 sample_freq = 80
 time_delta = timedelta(milliseconds = (10**3)/sample_freq)
 
-file_id = 21
-file_name = "6_3_2.txt"
+file_id = sys.argv[2]
+file_name = sys.argv[3]
 
 filename_components = file_name.split("_")
 file_device_id = filename_components[2].replace(".txt","")
