@@ -9,5 +9,7 @@ from classes.Signal import Signal
 from classes.HRClassifier import HRClassifier
 
 classifier = HRClassifier()
-classifier.train(True)
-classifier.validate(20)
+classifier.train1()
+#classifier.load_data()
+#classifier.train(True)
+#classifier.validate(20)

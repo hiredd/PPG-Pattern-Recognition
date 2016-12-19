@@ -17,6 +17,8 @@ class Signal:
 
     def __init__(self, signal, timestamps, fs = 80):
         self.content = np.array(signal)
+        self.correct_saturation()
+        self.remove_outliers()
         self.timestamps = np.array(timestamps)
         self.sample_freq = fs
 
@@ -66,6 +68,27 @@ class Signal:
         return feature_vector
 
 
+    def extract_PSD_features(self, start=None, end=None):
+        if start == None or end == None:
+            filtered_signal = self.bandpass_filter(0.5, 2.5)
+            filtered_signal = self.content
+        else:
+            filtered_signal = self.bandpass_filter(0.5, 2.5, start, end)
+            filtered_signal = self.content[start:end]
+        s_low = Signal(filtered_signal, self.timestamps)
+        s_low_f_filtered, s_low_psd_filtered = s_low.log_PSD()
+
+        # if start == None or end == None:
+        #     filtered_signal = self.bandpass_filter(13, 39)
+        # else:
+        #     filtered_signal = self.bandpass_filter(13, 39, start, end)
+
+        # s_high = Signal(filtered_signal, self.timestamps)
+        # s_high_f_filtered, s_high_psd_filtered = s_high.log_PSD()
+
+        return s_low_psd_filtered
+
+
     # Correct signal saturation (defined as sharp slope in curve) 
     # by scaling subsequent readings by the maximum range
     # Params, Return: list of PPG readings (floats)
@@ -76,7 +99,6 @@ class Signal:
         max_slope = 50000
         
         for k in range(len(signal_diff)):
-            #print(k)
             if signal_diff[k] > max_slope:
                 # Pull subsequent values down
                 self.content[k+1:signal_diff_end] = self.content[k+1:signal_diff_end] - max_val
@@ -91,7 +113,7 @@ class Signal:
         b, a = butter(order, [normal_cutoff_low, normal_cutoff_high], btype='bandpass', analog=False)
 
         if start==None and end==None:
-            self.content = filtfilt(b, a, self.content.tolist())
+            return filtfilt(b, a, self.content.tolist())
         else:
             return filtfilt(b, a, self.content[start:end].tolist())
 
