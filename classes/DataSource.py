@@ -41,7 +41,7 @@ class DataSource:
 		return data
 
 	def load_entire_dataset(self):
-		features = pd.DataFrame({"feature_vec", "file_id", "start", "end"})
+		features = pd.DataFrame({"feature_vec", "file_id", "start", "end", "pred"})
 		for file_id in range(20):
 			data = self.read_data_from_file(file_id)
 	        start = 0
@@ -51,15 +51,14 @@ class DataSource:
 	        		continue
 	            segment = data.iloc[start:start+step]
 	            signal = Signal(segment["ppg"].values, segment["timestamp"].values)
-	            features.append(signal.extract_PSD_features())
 	            features.append({"feature_vec": signal.extract_PSD_features(),
 	            				 "file_id"    : file_id,
 	            				 "start"      : start,
-	            				 "end"        : start+step})
+	            				 "end"        : start+step,
+                                 "pred"       : 0})
 	            start += step
-
         feature_vecs = np.array(features["feature_vec"].values)
-        feature_vecs = self.standardize_and_reduce_dim(feature_vecs, "retrain")
+        feature_vecs = self.standardize_and_reduce_dim(feature_vecs)
         features["feature_vec"] = feature_vecs
         self.dataset = features
 
@@ -95,7 +94,7 @@ class DataSource:
                     self.used_ranges.append([file_id, range_start, range_end])
 
         features = np.array(features)
-        features = self.standardize_and_reduce_dim(features, "train")
+        features = self.standardize_and_reduce_dim(features, True)
         
         # One hot encode labels
         labels = np.array(labels)
@@ -117,15 +116,15 @@ class DataSource:
             start += step
 
         features = np.array(features)
-        features = self.standardize_and_reduce_dim(features, "retrain")
+        features = self.standardize_and_reduce_dim(features)
 
         if include_signals:
             return features, signals
         return features
 
-	def standardize_and_reduce_dim(self, features, dataset_type="train"):
+	def standardize_and_reduce_dim(self, features, init=False):
         if self.scaler == None:
-            if dataset_type == "train":
+            if init:
                 scaler = preprocessing.StandardScaler().fit(features)
                 np.save("scaler", scaler)
             else:
@@ -134,7 +133,7 @@ class DataSource:
         features = self.scaler.transform(features)
 
         if self.pca == None:
-            if dataset_type == "train":
+            if init:
                 # Reduce dimensionality
                 pca = PCA(n_components=30)
                 pca = pca.fit(features)

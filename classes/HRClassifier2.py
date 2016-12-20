@@ -55,19 +55,17 @@ class HRClassifier2:
     def nn_batch_train(self, train_x, train_y):
         shuffled_ids = numpy.random.permutation(len(train_x))
         train_x, train_y = train_x[shuffled_ids], train_y[shuffled_ids]
-        self.model.train_on_batch(train_x, train_y)
+        losses, accuracies = self.model.train_on_batch(train_x, train_y)
+        return losses, accuracies
 
-    def newly_classified_features(self, x_unlabeled):
-    	y_predicted = model.predict_proba(x_unlabeled, batch_size=self.batch_size)[:,1]
+    def sort_by_pred(self, x_unlabeled):
+    	y_predicted = model.predict_proba(x_unlabeled["feature_vec"].values, batch_size=self.batch_size)[:,1]
+        x_unlabeled["pred"] = y_predicted
 
     	# Get the most confidently predicted features
-        df = pd.DataFrame({"data":list(x_unlabeled), "pred":y_predicted}).sort_values(["pred"])
-        qty = 100
-        train_x = pd.concat([df.iloc[:qty], df.iloc[-qty:]])["data"].values
-        train_x = np.array([v for v in train_x])
-        train_y = np.concatenate([np.zeros(qty), np.ones(qty)])
-        train_y = np_utils.to_categorical(train_y, 2)
-        return train_x, train_y
+        data_sorted_by_preds = x_unlabeled.sort_values(["pred"])
+        return data_sorted_by_preds
+
 
 
 
