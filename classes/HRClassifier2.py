@@ -21,13 +21,13 @@ import matplotlib.pyplot as plt
 
 class HRClassifier2:
 
-	# Neural network hyperparameters
-	learning_rate = 10**(-3)
-	dropout_rate = 0.2
-	num_epochs = 5
+    # Neural network hyperparameters
+    learning_rate = 10**(-3)
+    dropout_rate = 0.2
+    num_epochs = 5
     batch_size = 32
 
-	def __init__(self, use_nn=True):
+    def __init__(self, use_nn=True):
         self.use_nn = use_nn
         self.plot_id = 0
 
@@ -59,10 +59,10 @@ class HRClassifier2:
         return losses, accuracies
 
     def sort_by_pred(self, x_unlabeled):
-    	y_predicted = model.predict_proba(x_unlabeled["feature_vec"].values, batch_size=self.batch_size)[:,1]
+        y_predicted = model.predict_proba(x_unlabeled["feature_vec"].values, batch_size=self.batch_size)[:,1]
         x_unlabeled["pred"] = y_predicted
 
-    	# Get the most confidently predicted features
+        # Get the most confidently predicted features
         data_sorted_by_preds = x_unlabeled.sort_values(["pred"])
         return data_sorted_by_preds
 

@@ -21,14 +21,16 @@ import matplotlib.pyplot as plt
 
 class DataSource:
 
-	def __init__(self):
-		self.positive_features = []
-		self.negative_features = []
-		self.used_ranges = []
-		self.dataset = None
+    def __init__(self):
+        self.positive_features = []
+        self.negative_features = []
+        self.used_ranges = []
+        self.dataset = None
+        self.scaler = None
+        self.pca = None
 
-	def read_data_from_file(self, file_id):
-		data = pd.read_csv(
+    def read_data_from_file(self, file_id):
+        data = pd.read_csv(
                 "data/data%d.csv" % file_id, 
                 header=0, 
                 index_col=0, 
@@ -38,32 +40,34 @@ class DataSource:
                     "accx":   np.float32, 
                     "accy":   np.float32, 
                     "accz":   np.float32})
-		return data
+        return data
 
-	def load_entire_dataset(self):
-		features = pd.DataFrame({"feature_vec", "file_id", "start", "end", "pred"})
-		for file_id in range(20):
-			data = self.read_data_from_file(file_id)
-	        start = 0
-	        step  = 256
-	        while start+step < data.shape[0]:
-	        	if [file_id, start, start+step] in self.used_ranges:
-	        		continue
-	            segment = data.iloc[start:start+step]
-	            signal = Signal(segment["ppg"].values, segment["timestamp"].values)
-	            features.append({"feature_vec": signal.extract_PSD_features(),
-	            				 "file_id"    : file_id,
-	            				 "start"      : start,
-	            				 "end"        : start+step,
-                                 "pred"       : 0})
-	            start += step
+    def load_entire_dataset(self):
+        columns = ["feature_vec", "file_id", "start", "end", "pred"]
+        features = pd.DataFrame(columns=columns)
+        for file_id in range(20):
+            data = self.read_data_from_file(file_id)
+            start = 0
+            step  = 256
+            while start+step < data.shape[0]:
+                if [file_id, start, start+step] in self.used_ranges:
+                    continue
+                segment = data.iloc[start:start+step]
+                signal = Signal(segment["ppg"].values, segment["timestamp"].values)
+                features.append(pd.DataFrame([[signal.extract_PSD_features(),
+                                 file_id,
+                                 start,
+                                 start+step,
+                                 0]],columns=columns))
+                start += step
+                print(start)
         feature_vecs = np.array(features["feature_vec"].values)
         feature_vecs = self.standardize_and_reduce_dim(feature_vecs)
         features["feature_vec"] = feature_vecs
         self.dataset = features
 
-	# This is called in the beginning only
-	def load_labeled_data(self, num_records=50):
+    # This is called in the beginning only
+    def load_labeled_data(self, num_records=50):
         features = []
         labels = []
         for range_type in range(0,2):
@@ -102,7 +106,7 @@ class DataSource:
         
         return features, labels
 
-	def load_unlabeled_data_from_file(self, file_id, include_signals=False):
+    def load_unlabeled_data_from_file(self, file_id, include_signals=False):
         data = self.read_data_from_file(file_id)
         start = 0
         step  = 256
@@ -122,7 +126,7 @@ class DataSource:
             return features, signals
         return features
 
-	def standardize_and_reduce_dim(self, features, init=False):
+    def standardize_and_reduce_dim(self, features, init=False):
         if self.scaler == None:
             if init:
                 scaler = preprocessing.StandardScaler().fit(features)
