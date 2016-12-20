@@ -45,22 +45,28 @@ class DataSource:
     def load_entire_dataset(self):
         columns = ["feature_vec", "file_id", "start", "end", "pred"]
         features = pd.DataFrame(columns=columns)
-        for file_id in range(20):
+        for file_id in range(2,20):
             data = self.read_data_from_file(file_id)
             start = 0
             step  = 256
             while start+step < data.shape[0]:
                 if [file_id, start, start+step] in self.used_ranges:
+                    print("here1", self.used_ranges,[file_id, start, start+step])
                     continue
+                print("here2")
                 segment = data.iloc[start:start+step]
+                print("here3")
                 signal = Signal(segment["ppg"].values, segment["timestamp"].values)
-                features.append(pd.DataFrame([[signal.extract_PSD_features(),
+                print("here4")
+                features = features.append(pd.DataFrame([[signal.extract_PSD_features(),
                                  file_id,
                                  start,
                                  start+step,
                                  0]],columns=columns))
                 start += step
                 print(start)
+            print("shape", features.shape, "size", features.memory_usage())
+            print("memory", features["feature_vec"].values[0].shape)
         feature_vecs = np.array(features["feature_vec"].values)
         feature_vecs = self.standardize_and_reduce_dim(feature_vecs)
         features["feature_vec"] = feature_vecs
