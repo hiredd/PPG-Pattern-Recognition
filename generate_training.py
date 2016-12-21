@@ -37,8 +37,6 @@ df = pd.read_csv("data/data%d.csv" % current_file_id,
                  "accy":np.float32, 
                  "accz": np.float32})
 signal = Signal(df.loc[:,"ppg"].values, df.loc[:,"timestamp"].values)
-signal.correct_saturation()
-signal.remove_outliers()
 
 step = 256
 offset = 128 # 0
@@ -71,7 +69,7 @@ if label_non_HR:
         start, end = int(feat[4]), int(feat[5])
         if df.isin([current_file_id, start, end]).all(1).any() == False:
             range_ids = pd.DataFrame([[current_file_id, start, end]])
-            range_ids.to_csv('data/non_HR_ranges1.csv', mode='a', header=False, index=False)
+            range_ids.to_csv('data/non_HR_ranges.csv', mode='a', header=False, index=False)
     quit()
 
 num_figure_subplots = 30
