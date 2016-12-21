@@ -33,15 +33,10 @@ class Signal:
             return 0
         return i-1
 
-    def extract_features(self, start, end, validate_HR_range = True):
-        if start == None:
-            start = 0
-        if end == None:
-            end = len(self.content)-1
-
+    def extract_features(self, validate_HR_range=True):
         feature_vector = []
 
-        f, psd = self.log_PSD(start,end)
+        f, psd = self.log_PSD()
 
         i_freq = self.i_freq
 
@@ -59,7 +54,7 @@ class Signal:
             np.sum(psd[i_freq(f,1):i_freq(f,2)+1])))
 
         # F3: Peak variance
-        BPM, peak_variance = self.get_BPM_and_peak_variance(start, end)
+        BPM, peak_variance = self.get_BPM_and_peak_variance()
         feature_vector.append(peak_variance)
 
         if validate_HR_range and (BPM < 50 or BPM > 120):
@@ -162,14 +157,9 @@ class Signal:
 
 
     # Calculate the heart rate number from number of peaks and start:end timeframe 
-    # Input:
-    #   * start_time (datetime), end_time (datetime)
-    # Output:
-    #   * heart rate in beats per minute (float)
-    def get_BPM_and_peak_variance(self, start = None, end = None):
-
+    def get_BPM_and_peak_variance(self):
         # Focus on standard HR frequency range
-        segment = self.bandpass_filter(0.8, 2.5, start, end)
+        segment = self.bandpass_filter(0.8, 2.5)
 
         # Find the segment peaks' indices for peak occurrence variance feature.
         indices = detect_peaks.detect_peaks(segment, mph = 50)
@@ -178,7 +168,7 @@ class Signal:
         if len(indices) > 1:
             peak_variance = np.var(np.diff(indices))
 
-        time_difference = self.timestamp_in_datetime(end) - self.timestamp_in_datetime(start)
+        time_difference = self.timestamp_in_datetime(-1) - self.timestamp_in_datetime(0)
         time_difference_in_minutes = float(time_difference.seconds + 
                                      float(time_difference.microseconds)/10**6)/60.0
         BPM = float(len(indices)) / time_difference_in_minutes

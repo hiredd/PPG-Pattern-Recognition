@@ -1,22 +1,14 @@
 import numpy as np
-from sklearn.externals import joblib
 from sklearn.model_selection import train_test_split
 from sklearn import preprocessing, svm
 from sklearn.ensemble import BaggingClassifier
 from sklearn.metrics import confusion_matrix
 from sklearn.decomposition import PCA
 import scipy
-import tensorflow as tf
 import pandas as pd
 from classes.Signal import Signal
 import os
 import itertools
-from keras.models import Sequential, load_model
-from keras.layers import Dense, Dropout
-from keras.regularizers import l2, activity_l2
-from keras.optimizers import Adam, SGD
-from keras.callbacks import EarlyStopping, TensorBoard
-from keras.utils import np_utils
 import matplotlib.pyplot as plt
 
 class DataSource:
@@ -88,10 +80,10 @@ class DataSource:
         for range_type in range(0,2):
             if range_type == 0:
                 print("Reading non-HR segments")
-                range_file = "data/non_HR_ranges.csv"
+                range_file = "data/negative_ranges.csv"
             else:
                 print("Reading HR segments")
-                range_file = "data/HR_ranges.csv"
+                range_file = "data/positive_ranges.csv"
 
             if from_file_id:
                 ranges = pd.read_csv(
@@ -106,6 +98,7 @@ class DataSource:
                     names=["file_id", "start", "end"])
                 ranges = ranges.reindex(np.random.permutation(ranges.index))
                 ranges = ranges.iloc[:self.num_labeled_records]
+                print(ranges.shape)
 
             gb = ranges.groupby(["file_id"])
 
@@ -133,7 +126,7 @@ class DataSource:
         dataset["feature_vec"] = list(feature_vecs)
         return dataset
 
-    def load_unlabeled_data_from_file(self, file_id, include_signals=False):
+    def load_unlabeled_data_from_file(self, file_id, include_signals=False, use_psds=True):
         data = self.read_data_from_file(file_id)
         start = 0
         step  = 256
@@ -143,7 +136,10 @@ class DataSource:
             segment = data.iloc[start:start+step]
             signal = Signal(segment["ppg"].values, segment["timestamp"].values)
             signals.append(signal)
-            features.append(signal.extract_PSD_features())
+            if use_psds:
+                features.append(signal.extract_PSD_features())
+            else:
+                features.append(signal.extract_features())
             start += step
 
         features = np.array(features)
