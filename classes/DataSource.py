@@ -9,7 +9,7 @@ import scipy
 import tensorflow as tf
 import pandas as pd
 from classes.Signal import Signal
-import os.path
+import os
 import itertools
 from keras.models import Sequential, load_model
 from keras.layers import Dense, Dropout
@@ -21,13 +21,13 @@ import matplotlib.pyplot as plt
 
 class DataSource:
 
-    def __init__(self):
-        self.positive_features = []
-        self.negative_features = []
-        self.used_ranges = []
-        self.dataset = None
-        self.scaler = None
-        self.pca = None
+    dataset = None
+    scaler = None
+    pca = None
+
+    def __init__(self, num_labeled_records=100, pca_n_components=30):
+        self.num_labeled_records=num_labeled_records
+        self.pca_n_components = pca_n_components
 
     def read_data_from_file(self, file_id):
         data = pd.read_csv(
@@ -42,38 +42,47 @@ class DataSource:
                     "accz":   np.float32})
         return data
 
-    def load_entire_dataset(self):
-        columns = ["feature_vec", "file_id", "start", "end", "pred"]
-        features = pd.DataFrame(columns=columns)
-        for file_id in range(2,20):
-            data = self.read_data_from_file(file_id)
-            start = 0
-            step  = 256
-            while start+step < data.shape[0]:
-                if [file_id, start, start+step] in self.used_ranges:
-                    print("here1", self.used_ranges,[file_id, start, start+step])
-                    continue
-                print("here2")
-                segment = data.iloc[start:start+step]
-                print("here3")
-                signal = Signal(segment["ppg"].values, segment["timestamp"].values)
-                print("here4")
-                features = features.append(pd.DataFrame([[signal.extract_PSD_features(),
-                                 file_id,
-                                 start,
-                                 start+step,
-                                 0]],columns=columns))
-                start += step
-                print(start)
-            print("shape", features.shape, "size", features.memory_usage())
-            print("memory", features["feature_vec"].values[0].shape)
-        feature_vecs = np.array(features["feature_vec"].values)
-        feature_vecs = self.standardize_and_reduce_dim(feature_vecs)
-        features["feature_vec"] = feature_vecs
-        self.dataset = features
+    def load_or_process_entire_dataset(self):
+        if os.path.isfile("dataset.h5"):
+            self.dataset = pd.read_hdf("dataset.h5")
+        else:
+            columns = ["feature_vec", "file_id", "start", "end", "pred"]
+            dataset = pd.DataFrame(columns=columns)
+            for file_id in range(0,20):
+                data = self.read_data_from_file(file_id)
+                print("Processing file data%d.csv" % file_id, end='')
+                start = 0
+                step  = 256
+                data_size = data.shape[0]
+                while start+step < data_size:
+                    if start % (data_size//10) < step:
+                        print(".", sep=' ', end='', flush=True)
+                    segment = data.iloc[start:start+step]
+                    signal = Signal(segment["ppg"].values, segment["timestamp"].values)
+                    dataset = dataset.append(pd.DataFrame([[signal.extract_PSD_features(),
+                                     file_id,
+                                     start,
+                                     start+step,
+                                     0]],columns=columns))
+                    start += step
+                print()
+                print("Total feature vectors generated so far:", dataset.shape[0])
 
-    # This is called in the beginning only
-    def load_labeled_data(self, num_records=50):
+            feature_vecs = dataset["feature_vec"].values
+            feature_vecs = np.array([v for v in feature_vecs])
+            feature_vecs = self.standardize_and_reduce_dim(feature_vecs)
+            dataset["feature_vec"] = list(feature_vecs)
+
+            dataset = dataset.reset_index()
+            dataset.to_hdf("dataset.h5", "dataset")
+            self.dataset = dataset
+
+    # Called once in the beginning only and during tests
+    def load_labeled_dataset(self, from_file_id=None):
+        columns = ["feature_vec", "file_id", "start", "end", "label"]
+        if from_file_id:
+            columns.append("signal")
+        dataset = pd.DataFrame(columns=columns)
         features = []
         labels = []
         for range_type in range(0,2):
@@ -84,33 +93,45 @@ class DataSource:
                 print("Reading HR segments")
                 range_file = "data/HR_ranges.csv"
 
-            ranges = pd.read_csv(
-                range_file, 
-                header=None, 
-                names=["file_id", "start", "end"],
-                nrows=num_records)
+            if from_file_id:
+                ranges = pd.read_csv(
+                    range_file, 
+                    header=None, 
+                    names=["file_id", "start", "end"])
+                ranges = ranges[ranges["file_id"] == from_file_id]
+            else:
+                ranges = pd.read_csv(
+                    range_file, 
+                    header=None, 
+                    names=["file_id", "start", "end"])
+                ranges = ranges.reindex(np.random.permutation(ranges.index))
+                ranges = ranges.iloc[:self.num_labeled_records]
 
             gb = ranges.groupby(["file_id"])
 
             for file_id, indices in gb.groups.items():
                 data = self.read_data_from_file(file_id)
                 for i in indices:
-                    range_start = ranges.loc[i,"start"]
-                    range_end = ranges.loc[i,"end"]
-                    segment = data.iloc[range_start:range_end]
+                    start = ranges.loc[i,"start"]
+                    end = ranges.loc[i,"end"]
+                    segment = data.iloc[start:end]
                     signal = Signal(segment["ppg"].values, segment["timestamp"].values)
-                    features.append(signal.extract_PSD_features())
-                    labels.append(range_type)
-                    self.used_ranges.append([file_id, range_start, range_end])
 
-        features = np.array(features)
-        features = self.standardize_and_reduce_dim(features, True)
-        
-        # One hot encode labels
-        labels = np.array(labels)
-        labels = np_utils.to_categorical(labels, 2)
-        
-        return features, labels
+                    dataset_entry = [signal.extract_PSD_features(),
+                                     file_id,
+                                     start,
+                                     end,
+                                     range_type]
+                    if from_file_id:
+                        dataset_entry.append(signal)
+
+                    dataset = dataset.append(pd.DataFrame([dataset_entry],columns=columns))
+
+        feature_vecs = dataset["feature_vec"].values
+        feature_vecs = np.array([v for v in feature_vecs])
+        feature_vecs = self.standardize_and_reduce_dim(feature_vecs, init=True)
+        dataset["feature_vec"] = list(feature_vecs)
+        return dataset
 
     def load_unlabeled_data_from_file(self, file_id, include_signals=False):
         data = self.read_data_from_file(file_id)
@@ -145,7 +166,7 @@ class DataSource:
         if self.pca == None:
             if init:
                 # Reduce dimensionality
-                pca = PCA(n_components=30)
+                pca = PCA(n_components=self.pca_n_components)
                 pca = pca.fit(features)
                 np.save("pca", pca)
             else:
@@ -154,3 +175,25 @@ class DataSource:
 
         features = self.pca.transform(features)
         return features
+
+    def display_dataset(self, dataset):
+        num_figures = 3
+        num_figure_subplots = 30
+        for k in range(num_figures):
+            plt.figure(k+1)
+            for i in range(num_figure_subplots):
+                e = dataset.iloc[k*num_figure_subplots + i]
+                signal = e.signal
+
+                signal_filtered = signal.bandpass_filter(0.8, 2.5)
+
+                signal_scaled = preprocessing.scale(signal.content)
+                signal_filtered_scaled = preprocessing.scale(signal_filtered)
+
+                plt.subplot(num_figure_subplots/3,3,i+1)
+                plt.plot(signal_scaled)
+                plt.plot(signal_filtered_scaled, color='r')
+
+                peaks = scipy.signal.find_peaks_cwt(signal_filtered_scaled, np.arange(5,10))
+                plt.plot(peaks, signal_filtered_scaled[peaks], marker='o', linestyle="None")
+            plt.savefig('plots/plot%d.png' % k)
