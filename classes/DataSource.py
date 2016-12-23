@@ -4,6 +4,7 @@ from sklearn import preprocessing, svm
 from sklearn.ensemble import BaggingClassifier
 from sklearn.metrics import confusion_matrix
 from sklearn.decomposition import PCA
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 import scipy
 import pandas as pd
 from classes.Signal import Signal
@@ -16,8 +17,9 @@ class DataSource:
     dataset = None
     scaler = None
     pca = None
+    figure_id = 1
 
-    def __init__(self, num_labeled_records=100, pca_n_components=30):
+    def __init__(self, num_labeled_records=500, pca_n_components=30):
         self.num_labeled_records=num_labeled_records
         self.pca_n_components = pca_n_components
 
@@ -35,8 +37,9 @@ class DataSource:
         return data
 
     def load_or_process_entire_dataset(self):
-        if os.path.isfile("dataset.h5"):
-            self.dataset = pd.read_hdf("dataset.h5")
+        if os.path.isfile("dataset.pkl"):
+            #self.dataset = pd.read_hdf("dataset.h5")
+            self.dataset = pd.read_pickle("dataset.pkl")
         else:
             columns = ["feature_vec", "file_id", "start", "end", "pred"]
             dataset = pd.DataFrame(columns=columns)
@@ -60,98 +63,94 @@ class DataSource:
                 print()
                 print("Total feature vectors generated so far:", dataset.shape[0])
 
-            feature_vecs = dataset["feature_vec"].values
-            feature_vecs = np.array([v for v in feature_vecs])
+            feature_vecs = np.vstack(dataset["feature_vec"])
             feature_vecs = self.standardize_and_reduce_dim(feature_vecs)
             dataset["feature_vec"] = list(feature_vecs)
 
-            dataset = dataset.reset_index()
-            dataset.to_hdf("dataset.h5", "dataset")
+            dataset.reset_index(drop=True, inplace=True)
+            #dataset.to_hdf("dataset.h5", "dataset")
+            dataset.to_pickle("dataset.pkl")
             self.dataset = dataset
 
     # Called once in the beginning only and during tests
-    def load_labeled_dataset(self, from_file_id=None):
-        columns = ["feature_vec", "file_id", "start", "end", "label"]
-        if from_file_id:
-            columns.append("signal")
-        dataset = pd.DataFrame(columns=columns)
-        features = []
-        labels = []
-        for range_type in range(0,2):
-            if range_type == 0:
-                print("Reading non-HR segments")
-                range_file = "data/negative_ranges.csv"
-            else:
-                print("Reading HR segments")
-                range_file = "data/positive_ranges.csv"
-
+    def load_or_process_labeled_dataset(self, from_file_id=None):
+        if from_file_id==None and os.path.isfile("dataset_labeled.pkl"):
+            #self.dataset = pd.read_hdf("dataset.h5")
+            return pd.read_pickle("dataset_labeled.pkl")
+        else:
+            columns = ["feature_vec", "file_id", "start", "end", "label"]
             if from_file_id:
+                columns.append("signal")
+            dataset = pd.DataFrame(columns=columns)
+            features = []
+            labels = []
+            for range_type in range(0,2):
+                if range_type == 0:
+                    print("Reading non-HR segments")
+                    range_file = "data/negative_ranges.csv"
+                else:
+                    print("Reading HR segments")
+                    range_file = "data/positive_ranges.csv"
+
                 ranges = pd.read_csv(
-                    range_file, 
-                    header=None, 
-                    names=["file_id", "start", "end"])
-                ranges = ranges[ranges["file_id"] == from_file_id]
+                        range_file, 
+                        header=None, 
+                        names=["file_id", "start", "end"])
+                if from_file_id:
+                    ranges = ranges[ranges["file_id"] == from_file_id]
+                else:
+                    ranges = ranges.reindex(np.random.permutation(ranges.index))
+                    ranges = ranges.iloc[:self.num_labeled_records]
+
+                gb = ranges.groupby(["file_id"])
+
+                for file_id, indices in gb.groups.items():
+                    if from_file_id == None and file_id == 20:
+                        continue
+                    data = self.read_data_from_file(file_id)
+                    for i in indices:
+                        start = ranges.loc[i,"start"]
+                        end = ranges.loc[i,"end"]
+                        segment = data.iloc[start:end]
+                        signal = Signal(segment["ppg"].values, segment["timestamp"].values)
+
+                        dataset_entry = [signal.extract_PSD_features(),
+                                         file_id,
+                                         start,
+                                         end,
+                                         range_type]
+                        if from_file_id:
+                            dataset_entry.append(signal)
+
+                        dataset = dataset.append(pd.DataFrame([dataset_entry],columns=columns))
+
+            feature_vecs = np.vstack(dataset["feature_vec"])
+            labels = None
+            if from_file_id == None:
+                labels = dataset["label"].values
+            feature_vecs = self.standardize_and_reduce_dim(feature_vecs, labels)
+            dataset["feature_vec"] = list(feature_vecs)
+            dataset.reset_index(drop=True, inplace=True)
+            dataset = dataset.reindex(np.random.permutation(dataset.index))
+
+            if from_file_id==None:
+                dataset.to_pickle("dataset_labeled.pkl")
+            return dataset
+
+    def standardize_and_reduce_dim(self, features, labels=None):
+        if self.pca == None:
+            if ~os.path.isfile("pca.npy"):
+                pca = PCA(n_components=self.pca_n_components, whiten=True)
+                pca = pca.fit(features, labels)
+                np.save("pca", pca)
             else:
-                ranges = pd.read_csv(
-                    range_file, 
-                    header=None, 
-                    names=["file_id", "start", "end"])
-                ranges = ranges.reindex(np.random.permutation(ranges.index))
-                ranges = ranges.iloc[:self.num_labeled_records]
-                print(ranges.shape)
+                pca = np.load("pca")
+            self.pca = pca
+        features = self.pca.transform(features)
+        print("post PCA:", features.shape)
 
-            gb = ranges.groupby(["file_id"])
-
-            for file_id, indices in gb.groups.items():
-                data = self.read_data_from_file(file_id)
-                for i in indices:
-                    start = ranges.loc[i,"start"]
-                    end = ranges.loc[i,"end"]
-                    segment = data.iloc[start:end]
-                    signal = Signal(segment["ppg"].values, segment["timestamp"].values)
-
-                    dataset_entry = [signal.extract_PSD_features(),
-                                     file_id,
-                                     start,
-                                     end,
-                                     range_type]
-                    if from_file_id:
-                        dataset_entry.append(signal)
-
-                    dataset = dataset.append(pd.DataFrame([dataset_entry],columns=columns))
-
-        feature_vecs = dataset["feature_vec"].values
-        feature_vecs = np.array([v for v in feature_vecs])
-        feature_vecs = self.standardize_and_reduce_dim(feature_vecs, init=True)
-        dataset["feature_vec"] = list(feature_vecs)
-        return dataset
-
-    def load_unlabeled_data_from_file(self, file_id, include_signals=False, use_psds=True):
-        data = self.read_data_from_file(file_id)
-        start = 0
-        step  = 256
-        features = []
-        signals = []
-        while start+step < data.shape[0]:
-            segment = data.iloc[start:start+step]
-            signal = Signal(segment["ppg"].values, segment["timestamp"].values)
-            signals.append(signal)
-            if use_psds:
-                features.append(signal.extract_PSD_features())
-            else:
-                features.append(signal.extract_features())
-            start += step
-
-        features = np.array(features)
-        features = self.standardize_and_reduce_dim(features)
-
-        if include_signals:
-            return features, signals
-        return features
-
-    def standardize_and_reduce_dim(self, features, init=False):
         if self.scaler == None:
-            if init:
+            if ~os.path.isfile("scaler.npy"):
                 scaler = preprocessing.StandardScaler().fit(features)
                 np.save("scaler", scaler)
             else:
@@ -159,37 +158,54 @@ class DataSource:
             self.scaler = scaler
         features = self.scaler.transform(features)
 
-        if self.pca == None:
-            if init:
-                # Reduce dimensionality
-                pca = PCA(n_components=self.pca_n_components)
-                pca = pca.fit(features)
-                np.save("pca", pca)
-            else:
-                pca = np.load("pca")
-            self.pca = pca
-
-        features = self.pca.transform(features)
+        #print("mean", features.mean(axis=0), "std", features.std(axis=0))
         return features
 
     def display_dataset(self, dataset):
         num_figures = 3
-        num_figure_subplots = 30
+        num_figure_subplots = 10
         for k in range(num_figures):
-            plt.figure(k+1)
+            print("figure id:", self.figure_id)
+            plt.figure(self.figure_id)
             for i in range(num_figure_subplots):
                 e = dataset.iloc[k*num_figure_subplots + i]
+
+                # remove this - just for testing
+                if "signal" not in e:
+                    dd = self.read_data_from_file(e.file_id)
+                    segment = dd.iloc[int(e.start):int(e.end)]
+                    e.signal = Signal(segment["ppg"].values, segment["timestamp"].values)
+                
                 signal = e.signal
 
                 signal_filtered = signal.bandpass_filter(0.8, 2.5)
 
-                signal_scaled = preprocessing.scale(signal.content)
+                signal_scaled = preprocessing.scale(signal.bandpass_filter(0.1, 20))
                 signal_filtered_scaled = preprocessing.scale(signal_filtered)
 
-                plt.subplot(num_figure_subplots/3,3,i+1)
-                plt.plot(signal_scaled)
-                plt.plot(signal_filtered_scaled, color='r')
+                ax = plt.subplot(10,2,2*i+1)
+
+                #remove this - just for testing
+                if "label" in e:
+                    printout = e.label
+                else:
+                    printout = e.pred
+                ax.text(0.5, 0.5, printout,
+                horizontalalignment='center',
+                verticalalignment='top',
+                transform=ax.transAxes,
+                fontsize=12)
+
+                ax.plot(signal_scaled)
+                ax.plot(signal_filtered_scaled, color='r')
 
                 peaks = scipy.signal.find_peaks_cwt(signal_filtered_scaled, np.arange(5,10))
-                plt.plot(peaks, signal_filtered_scaled[peaks], marker='o', linestyle="None")
-            plt.savefig('plots/plot%d.png' % k)
+                ax.plot(peaks, signal_filtered_scaled[peaks], marker='o', linestyle="None")
+
+                ax = plt.subplot(10,2,2*i+2)
+                ax.plot(e.feature_vec)
+                print("%d,%d,%d" %(int(e.file_id), int(e.start), int(e.end)))
+
+            plt.show()
+            #plt.savefig('plots/plot%d.png' % self.figure_id)
+            self.figure_id += 1

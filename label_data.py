@@ -14,6 +14,7 @@ sys.path.append('lib')
 import detect_peaks
 from sklearn import preprocessing
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 from peakutils.peak import indexes
 from classes.Signal import Signal
 from classes.DataSource import DataSource
@@ -58,7 +59,6 @@ labeled_ds_pos = pd.read_csv('data/positive_ranges.csv',
 labeled_ds_neg = pd.read_csv('data/negative_ranges.csv', 
                         header=None, 
                         names=["file_id", "start", "end"])
-labeled_ds = pd.concat([labeled_ds_pos, labeled_ds_neg])
 
 step = 256
 offset = 0
@@ -75,7 +75,7 @@ while start+step < end:
 # Sort by features in ascending order, in order of feature importance
 columns = ["mean_HF", "HF/LF", "VLF/LF", "peak_var", "signal", "start", "end"]
 sort_column_order = [columns[i] for i in [2,1,3,0]]
-features = pd.DataFrame(features, columns=columns).sort_values(sort_column_order)
+features = pd.DataFrame(features, columns=columns).sort_values(sort_column_order, ascending=True)
 
 '''
 df = pd.read_csv("data/HR_ranges.csv")
@@ -100,7 +100,6 @@ if label_non_HR:
 num_figure_subplots = 30
 counter = 0
 k = 0
-review = True
 while num_figure_subplots*k < features.shape[0] and k < 100:
     fig = plt.figure(k+1)
     subplots = []
@@ -110,6 +109,7 @@ while num_figure_subplots*k < features.shape[0] and k < 100:
         start = feat.start
         end = feat.end
 
+        signal_without_outliers = signal.bandpass_filter(0.1, 20)
         signal_filtered = signal.bandpass_filter(0.8, 2.5)
 
         start_time = pd.Timestamp(signal.timestamp_in_datetime(0))
@@ -118,21 +118,38 @@ while num_figure_subplots*k < features.shape[0] and k < 100:
         t = pd.to_datetime(t)
 
         ax = plt.subplot(num_figure_subplots/3,3,i+1)
+
+        alpha = 1
+        used = False
+        label = None
+        if labeled_ds_pos.isin([FILE_ID, start, end]).all(1).any():
+            label = "+"
+        if labeled_ds_neg.isin([FILE_ID, start, end]).all(1).any():
+            label = "-"
+        if label != None:
+            alpha = 0.35
+            ax.text(0.5, 0.5,'Already labeled %s' % label, 
+                horizontalalignment='center',
+                verticalalignment='center',
+                transform=ax.transAxes,
+                fontsize=14)
+            used = True
+
         subplots.append({"pos":ax.get_position(), 
                          "range":[FILE_ID, start, end], 
-                         "used":False})
+                         "used":used})
 
-        if review:
-            if labeled_ds.isin([FILE_ID, start, end]).all(1).any() == False:
-                plt.plot(t, preprocessing.scale(signal.content))
-                plt.plot(t, preprocessing.scale(signal_filtered), color='r')
-        else:
-            plt.plot(t, preprocessing.scale(signal.content))
-            plt.plot(t, preprocessing.scale(signal_filtered), color='r')
+        ax.plot(t, preprocessing.scale(signal_without_outliers), alpha=alpha)
+        ax.plot(t, preprocessing.scale(signal_filtered), color='r', alpha=alpha)
+        ax.xaxis_date()
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
+        ax.yaxis.set_visible(False)
+
+        #fig.autofmt_xdate()
 
     cid = fig.canvas.mpl_connect('button_press_event', onclick)
     figManager = plt.get_current_fig_manager()
-    #figManager.window.showMaximized()
+    figManager.window.showMaximized()
     plt.show()
 
     counter += num_figure_subplots

@@ -9,6 +9,7 @@ import detect_peaks
 from sklearn import preprocessing
 import matplotlib.pyplot as plt
 from peakutils.peak import indexes
+import pywt
 
 # Separate this file into Signal (parent class), HRSignal, and AccSignal
 # and put ad hoc methods in each of those classes
@@ -64,14 +65,21 @@ class Signal:
 
 
     def extract_PSD_features(self, start=None, end=None):
-        if start == None or end == None:
-            filtered_signal = self.bandpass_filter(0.5, 2.5)
-            filtered_signal = self.content
-        else:
-            filtered_signal = self.bandpass_filter(0.5, 2.5, start, end)
-            filtered_signal = self.content[start:end]
-        s_low = Signal(filtered_signal, self.timestamps)
-        s_low_f_filtered, s_low_psd_filtered = s_low.log_PSD()
+        #(cA, cD) = pywt.dwt(self.content, 'db8')
+        #return cA + cD
+
+        ### I just modified
+        s_low_f_filtered, s_low_psd_filtered = self.log_PSD()
+        return s_low_psd_filtered
+
+        # if start == None or end == None:
+        #     filtered_signal = self.bandpass_filter(0.5, 2.5)
+        #     filtered_signal = self.content
+        # else:
+        #     filtered_signal = self.bandpass_filter(0.5, 2.5, start, end)
+        #     filtered_signal = self.content[start:end]
+        # s_low = Signal(filtered_signal, self.timestamps)
+        # s_low_f_filtered, s_low_psd_filtered = s_low.log_PSD()
 
         # if start == None or end == None:
         #     filtered_signal = self.bandpass_filter(13, 39)
@@ -132,7 +140,7 @@ class Signal:
             end = len(self.content)
         segment = self.content[start:end].tolist()
         f, psd = welch(segment, fs = self.sample_freq, nperseg = sample_window)
-        return f, 10*np.log10(psd)
+        return f, np.log10(psd)
 
     def fft(self, length = None):
         if length == None:

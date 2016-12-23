@@ -6,6 +6,7 @@ from sklearn import preprocessing, svm
 from sklearn.ensemble import BaggingClassifier
 from sklearn.metrics import confusion_matrix
 from sklearn.decomposition import PCA
+from sklearn.cluster import KMeans
 import scipy
 import tensorflow as tf
 import pandas as pd
@@ -45,6 +46,8 @@ class HRClassifier2:
         model = Sequential()
         model.add(Dense(128, input_dim=input_dim, activation="relu"))
         model.add(Dropout(self.dropout_rate))
+        model.add(Dense(64, activation="relu"))
+        model.add(Dropout(self.dropout_rate))
         model.add(Dense(2, activation="softmax"))
 
         optimizer = Adam(lr=self.learning_rate, decay=self.decay_rate)
@@ -53,8 +56,24 @@ class HRClassifier2:
             optimizer=optimizer)
         self.model = model
 
+    def k_mean_train(self, dataset):
+        train_x = np.vstack(dataset["feature_vec"])
+        train_y = np.array(dataset["label"].values, dtype=np.int8)
+
+        train_x, test_x, train_y, test_y = train_test_split(train_x, train_y, test_size=0.2)
+
+        kmeans = KMeans(n_clusters=1).fit(train_x, train_y)
+        #print("kmeans", np.sum(abs(np.array(kmeans.predict(test_x))-np.array(test_y)))/test_y.shape[0])
+        print("kmeans", kmeans.score(train_x, train_y))
+
+    def nn_train(self, dataset):
+        train_x = np.vstack(dataset["feature_vec"])
+        train_y = np.array(dataset["label"].values, dtype=np.int8)
+        train_y = np_utils.to_categorical(train_y, 2)
+        self.model.fit(train_x, train_y, batch_size=32, nb_epoch=10, shuffle=True)
+
     def nn_batch_train(self, dataset, num_epochs=1, verbose=False):
-        train_x = np.array([v for v in dataset["feature_vec"].values])
+        train_x = np.vstack(dataset["feature_vec"])
         train_y = np.array(dataset["label"].values, dtype=np.int8)
         train_y = np_utils.to_categorical(train_y, 2)
 
@@ -71,19 +90,19 @@ class HRClassifier2:
         return losses, accuracies
 
     def evaluate(self, dataset):
-        test_x = np.array([v for v in dataset["feature_vec"].values])
+        test_x = np.vstack(dataset["feature_vec"])
         test_y = np.array(dataset["label"].values, dtype=np.int8)
         test_y = np_utils.to_categorical(test_y, 2)
-        return self.model.test_on_batch(test_x, test_y)
+        return self.model.evaluate(test_x, test_y)
 
     def pred_and_sort(self, dataset):
-        train_x = np.array([v for v in dataset["feature_vec"].values])
+        train_x = np.vstack(dataset["feature_vec"])
 
         y_predicted = self.model.predict_proba(train_x)[:,1]
         dataset["pred"] = list(y_predicted)
 
         # Get the most confidently predicted features
-        data_sorted_by_preds = dataset.sort_values(["pred"])
+        data_sorted_by_preds = dataset.sort_values(["pred"], ascending=False)
         return data_sorted_by_preds
 
 
