@@ -66,6 +66,10 @@ class HRClassifier2:
         #print("kmeans", np.sum(abs(np.array(kmeans.predict(test_x))-np.array(test_y)))/test_y.shape[0])
         print("kmeans", kmeans.score(train_x, train_y))
 
+    def svm_train(self, dataset):
+        train_x = np.vstack(dataset["feature_vec"])
+        train_y = np.array(dataset["label"].values, dtype=np.int8)
+        
     def nn_train(self, dataset):
         train_x = np.vstack(dataset["feature_vec"])
         train_y = np.array(dataset["label"].values, dtype=np.int8)

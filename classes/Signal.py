@@ -65,8 +65,8 @@ class Signal:
 
 
     def extract_PSD_features(self, start=None, end=None):
-        #(cA, cD) = pywt.dwt(self.content, 'db8')
-        #return cA + cD
+        #(cA, cD) = pywt.dwt(self.content, 'db3')
+        #cA2, cD5, cD4, cD3, cD2, cD1 = pywt.wavedec(self.content, 'db3', level=5)
 
         ### I just modified
         s_low_f_filtered, s_low_psd_filtered = self.log_PSD()

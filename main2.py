@@ -32,7 +32,7 @@ c.init_nn_model(input_dim=input_dim)
 
 num_batches = 10
 batch = 1
-# Train using T
+# Train on T
 print("Batch %d/%d" % (batch, num_batches))
 losses, accuracies = c.nn_batch_train(labeled_ds, num_epochs=16) # there is a problem with this - the predictions are not good enough for 1000 examples
 # try just training and predicting (with fit and predict_proba) with the rest of the dataset - see what happens

@@ -5,6 +5,7 @@ from sklearn.ensemble import BaggingClassifier
 from sklearn.metrics import confusion_matrix
 from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.externals import joblib
 import scipy
 import pandas as pd
 from classes.Signal import Signal
@@ -19,7 +20,7 @@ class DataSource:
     pca = None
     figure_id = 1
 
-    def __init__(self, num_labeled_records=500, pca_n_components=30):
+    def __init__(self, num_labeled_records=256, pca_n_components=30):
         self.num_labeled_records=num_labeled_records
         self.pca_n_components = pca_n_components
 
@@ -38,7 +39,6 @@ class DataSource:
 
     def load_or_process_entire_dataset(self):
         if os.path.isfile("dataset.pkl"):
-            #self.dataset = pd.read_hdf("dataset.h5")
             self.dataset = pd.read_pickle("dataset.pkl")
         else:
             columns = ["feature_vec", "file_id", "start", "end", "pred"]
@@ -68,14 +68,12 @@ class DataSource:
             dataset["feature_vec"] = list(feature_vecs)
 
             dataset.reset_index(drop=True, inplace=True)
-            #dataset.to_hdf("dataset.h5", "dataset")
             dataset.to_pickle("dataset.pkl")
             self.dataset = dataset
 
     # Called once in the beginning only and during tests
     def load_or_process_labeled_dataset(self, from_file_id=None):
         if from_file_id==None and os.path.isfile("dataset_labeled.pkl"):
-            #self.dataset = pd.read_hdf("dataset.h5")
             return pd.read_pickle("dataset_labeled.pkl")
         else:
             columns = ["feature_vec", "file_id", "start", "end", "label"]
@@ -99,14 +97,15 @@ class DataSource:
                 if from_file_id:
                     ranges = ranges[ranges["file_id"] == from_file_id]
                 else:
+                    # Reject test set samples
+                    ranges = ranges[ranges["file_id"] != 20.0]
+                    # Take {num_labeled_records} random samples
                     ranges = ranges.reindex(np.random.permutation(ranges.index))
                     ranges = ranges.iloc[:self.num_labeled_records]
 
                 gb = ranges.groupby(["file_id"])
 
                 for file_id, indices in gb.groups.items():
-                    if from_file_id == None and file_id == 20:
-                        continue
                     data = self.read_data_from_file(file_id)
                     for i in indices:
                         start = ranges.loc[i,"start"]
@@ -139,26 +138,26 @@ class DataSource:
 
     def standardize_and_reduce_dim(self, features, labels=None):
         if self.pca == None:
-            if ~os.path.isfile("pca.npy"):
+            if os.path.isfile("pca.pkl") == False:
                 pca = PCA(n_components=self.pca_n_components, whiten=True)
                 pca = pca.fit(features, labels)
-                np.save("pca", pca)
+                joblib.dump(pca, 'pca.pkl') 
             else:
-                pca = np.load("pca")
+                print("load PCA params")
+                pca = joblib.load('pca.pkl') 
             self.pca = pca
         features = self.pca.transform(features)
-        print("post PCA:", features.shape)
 
         if self.scaler == None:
-            if ~os.path.isfile("scaler.npy"):
+            if os.path.isfile("scaler.pkl") == False:
                 scaler = preprocessing.StandardScaler().fit(features)
-                np.save("scaler", scaler)
+                joblib.dump(scaler, 'scaler.pkl') 
             else:
-                scaler = np.load("scaler")
+                print("load scaler")
+                scaler = joblib.load("scaler.pkl")
             self.scaler = scaler
         features = self.scaler.transform(features)
 
-        #print("mean", features.mean(axis=0), "std", features.std(axis=0))
         return features
 
     def display_dataset(self, dataset):
