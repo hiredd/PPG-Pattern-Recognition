@@ -6,6 +6,7 @@ from sklearn import preprocessing, svm
 from sklearn.ensemble import BaggingClassifier
 from sklearn.metrics import confusion_matrix
 from sklearn.decomposition import PCA
+from sklearn.linear_model import SGDClassifier
 from sklearn.cluster import KMeans
 import scipy
 import tensorflow as tf
@@ -28,6 +29,8 @@ class HRClassifier2:
     learning_rate = 10**(-2)
     dropout_rate = 0.2
     decay_rate = 0.05
+    svm_model = None
+    model = None
 
     def __init__(self, use_nn=True):
         self.use_nn = use_nn
@@ -67,9 +70,12 @@ class HRClassifier2:
         print("kmeans", kmeans.score(train_x, train_y))
 
     def svm_train(self, dataset):
+        if self.svm_model == None:
+            self.svm_model = SGDClassifier(loss="hinge", penalty="l2")
         train_x = np.vstack(dataset["feature_vec"])
         train_y = np.array(dataset["label"].values, dtype=np.int8)
-        
+        self.svm_model = self.svm_model.partial_fit(train_x, train_y, [1,0])
+
     def nn_train(self, dataset):
         train_x = np.vstack(dataset["feature_vec"])
         train_y = np.array(dataset["label"].values, dtype=np.int8)
@@ -80,6 +86,10 @@ class HRClassifier2:
         train_x = np.vstack(dataset["feature_vec"])
         train_y = np.array(dataset["label"].values, dtype=np.int8)
         train_y = np_utils.to_categorical(train_y, 2)
+
+        tb = TensorBoard(log_dir='./logs', histogram_freq=0, write_graph=True, write_images=True)
+
+        return self.model.fit(train_x, train_y, batch_size=32, nb_epoch=num_epochs, callbacks=[tb], shuffle=True)
 
         for epoch in range(num_epochs):
             shuffled_ids = np.random.permutation(len(train_x))
@@ -92,6 +102,11 @@ class HRClassifier2:
             print("Learning rate:",exact_lr)
 
         return losses, accuracies
+
+    def evaluate_svm(self, dataset):
+        test_x = np.vstack(dataset["feature_vec"])
+        test_y = np.array(dataset["label"].values, dtype=np.int8)
+        return self.svm_model.score(test_x, test_y)
 
     def evaluate(self, dataset):
         test_x = np.vstack(dataset["feature_vec"])

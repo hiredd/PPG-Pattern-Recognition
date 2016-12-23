@@ -97,10 +97,11 @@ if label_non_HR:
             range_ids.to_csv('data/non_HR_ranges.csv', mode='a', header=False, index=False)
     quit()
 '''
+
 num_figure_subplots = 30
 counter = 0
 k = 0
-while num_figure_subplots*k < features.shape[0] and k < 100:
+while num_figure_subplots*k < features.shape[0] and k < 3:
     fig = plt.figure(k+1)
     subplots = []
     for i in range(num_figure_subplots):

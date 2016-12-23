@@ -147,23 +147,6 @@ class Signal:
             return fft(self.content)
         return fft(self.content, length)
 
-
-    # List of log PSDs of the sample_window-sized segments in the signal
-    # between start and end.
-    # Input:
-    #   * start (int), end (int): indeces of signal segment range
-    #   * sample_window (int): max-length of each segment, default to 512 ~6 seconds
-    #     of feature data
-    # Output:
-    #   * List of log_PSD tuples
-    def log_PSDs(self, start = None, end = None, sample_window = 512):
-        log_PSDs = np.array([])
-        while start + sample_window < end:
-            np.append(log_PSDs, self.log_PSD(start, start+sample_window))
-            start += sample_window
-        return log_PSDs
-
-
     # Calculate the heart rate number from number of peaks and start:end timeframe 
     def get_BPM_and_peak_variance(self):
         # Focus on standard HR frequency range

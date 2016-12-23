@@ -13,6 +13,8 @@ regenerate_dataset = False
 ds = DataSource()
 # Load initial labeled training set T
 labeled_ds = ds.load_or_process_labeled_dataset()
+ds.display_dataset(labeled_ds)
+quit()
 # Load entire (unlabeled) data set P
 ds.load_or_process_entire_dataset()
 # Remove T from P (i.e. P = P-T)
@@ -34,11 +36,11 @@ num_batches = 10
 batch = 1
 # Train on T
 print("Batch %d/%d" % (batch, num_batches))
-losses, accuracies = c.nn_batch_train(labeled_ds, num_epochs=16) # there is a problem with this - the predictions are not good enough for 1000 examples
+c.nn_batch_train(labeled_ds, num_epochs=10) # there is a problem with this - the predictions are not good enough for 1000 examples
 # try just training and predicting (with fit and predict_proba) with the rest of the dataset - see what happens
 #c.nn_train(labeled_ds)
 
-while batch<num_batches:
+while 1==0 and batch<num_batches:
     batch+=1
     # Use the model to classify new features T' from P, use the most 
     # confidently classified ones as the next training batch:
@@ -63,8 +65,8 @@ while batch<num_batches:
     most_confident_samples["label"] = list(labels)
 
     print("Batch %d/%d" % (batch, num_batches))
-    losses, accuracies = c.nn_batch_train(most_confident_samples, num_epochs=4)
-    print("loss:", np.mean(losses), np.mean(accuracies))
+    c.nn_batch_train(most_confident_samples, num_epochs=4)
+    #print("loss:", np.mean(losses), np.mean(accuracies))
 
 # Evaluate
 test_ds = ds.load_or_process_labeled_dataset(20)

@@ -20,7 +20,7 @@ class DataSource:
     pca = None
     figure_id = 1
 
-    def __init__(self, num_labeled_records=256, pca_n_components=30):
+    def __init__(self, num_labeled_records=2000, pca_n_components=30):
         self.num_labeled_records=num_labeled_records
         self.pca_n_components = pca_n_components
 
