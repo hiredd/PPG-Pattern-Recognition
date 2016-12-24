@@ -13,8 +13,6 @@ regenerate_dataset = False
 ds = DataSource()
 # Load initial labeled training set T
 labeled_ds = ds.load_or_process_labeled_dataset()
-ds.display_dataset(labeled_ds)
-quit()
 # Load entire (unlabeled) data set P
 ds.load_or_process_entire_dataset()
 # Remove T from P (i.e. P = P-T)

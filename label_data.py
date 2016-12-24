@@ -15,6 +15,7 @@ import detect_peaks
 from sklearn import preprocessing
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+from matplotlib.patches import Rectangle
 from peakutils.peak import indexes
 from classes.Signal import Signal
 from classes.DataSource import DataSource
@@ -49,6 +50,17 @@ def onclick(event):
             range_ids.to_csv('data/%s_ranges.csv' % LABEL_TYPE, 
                             mode='a', header=False, index=False)
             subplots[i]["used"] = True
+
+            fig.text(np.mean([subplot["pos"].x1,subplot["pos"].x0])-0.01, 
+                np.mean([subplot["pos"].y1,subplot["pos"].y0]),
+                'Labeled %s' % LABEL_TYPE, 
+                horizontalalignment='center',
+                verticalalignment='center',
+                color="green",
+                backgroundcolor="white",
+                fontsize=14)
+
+            fig.canvas.draw()
             break
 
 ds = DataSource()
@@ -101,8 +113,8 @@ if label_non_HR:
 num_figure_subplots = 30
 counter = 0
 k = 0
-while num_figure_subplots*k < features.shape[0] and k < 3:
-    fig = plt.figure(k+1)
+while num_figure_subplots*k < features.shape[0] and k < 100:
+    fig = plt.figure(k+1, figsize=(15, 10))
     subplots = []
     for i in range(num_figure_subplots):
         feat = features.iloc[num_figure_subplots*k+i]
@@ -138,7 +150,8 @@ while num_figure_subplots*k < features.shape[0] and k < 3:
 
         subplots.append({"pos":ax.get_position(), 
                          "range":[FILE_ID, start, end], 
-                         "used":used})
+                         "used":used,
+                         "figure_id":k+1})
 
         ax.plot(t, preprocessing.scale(signal_without_outliers), alpha=alpha)
         ax.plot(t, preprocessing.scale(signal_filtered), color='r', alpha=alpha)
@@ -150,7 +163,17 @@ while num_figure_subplots*k < features.shape[0] and k < 3:
 
     cid = fig.canvas.mpl_connect('button_press_event', onclick)
     figManager = plt.get_current_fig_manager()
-    figManager.window.showMaximized()
+    try:
+        figManager.window.showMaximized()
+    except:
+        try:
+            figManager.full_screen_toggle()
+        except:
+            try:
+                figManager.window.state('zoomed')
+            except:
+                pass
+
     plt.show()
 
     counter += num_figure_subplots
