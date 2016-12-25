@@ -73,7 +73,7 @@ labeled_ds_neg = pd.read_csv('data/negative_ranges.csv',
                         names=["file_id", "start", "end"])
 
 step = 256
-offset = 0
+offset = 128
 start, end = offset, dataset.shape[0]
 features = []
 while start+step < end:
@@ -122,7 +122,7 @@ while num_figure_subplots*k < features.shape[0] and k < 100:
         start = feat.start
         end = feat.end
 
-        signal_without_outliers = signal.bandpass_filter(0.1, 20)
+        signal_without_outliers = signal.bandpass_filter(1, 35)
         signal_filtered = signal.bandpass_filter(0.8, 2.5)
 
         start_time = pd.Timestamp(signal.timestamp_in_datetime(0))

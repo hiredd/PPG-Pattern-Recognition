@@ -1,26 +1,26 @@
 import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn import preprocessing, svm
-from sklearn.ensemble import BaggingClassifier
-from sklearn.metrics import confusion_matrix
-from sklearn.decomposition import PCA
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-from sklearn.externals import joblib
 import scipy
 import pandas as pd
-from classes.Signal import Signal
 import os
 import itertools
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+from sklearn import preprocessing
+from sklearn.metrics import confusion_matrix
+from sklearn.decomposition import PCA
+from sklearn.externals import joblib
+from helpers import *
+from classes.Signal import Signal
 
 class DataSource:
 
+    timestep_size = 256
     dataset = None
     scaler = None
     pca = None
     figure_id = 1
 
-    def __init__(self, num_labeled_records=2000, pca_n_components=30):
+    def __init__(self, num_labeled_records=512, pca_n_components=30):
         self.num_labeled_records=num_labeled_records
         self.pca_n_components = pca_n_components
 
@@ -38,8 +38,8 @@ class DataSource:
         return data
 
     def load_or_process_entire_dataset(self):
-        if os.path.isfile("dataset.pkl"):
-            self.dataset = pd.read_pickle("dataset.pkl")
+        if os.path.isfile("cache/dataset.pkl"):
+            self.dataset = pd.read_pickle("cache/dataset.pkl")
         else:
             columns = ["feature_vec", "file_id", "start", "end", "pred"]
             dataset = pd.DataFrame(columns=columns)
@@ -47,7 +47,7 @@ class DataSource:
                 data = self.read_data_from_file(file_id)
                 print("Processing file data%d.csv" % file_id, end='')
                 start = 0
-                step  = 256
+                step  = self.timestep_size
                 data_size = data.shape[0]
                 while start+step < data_size:
                     if start % (data_size//10) < step:
@@ -60,21 +60,19 @@ class DataSource:
                                      start+step,
                                      0]],columns=columns))
                     start += step
-                print()
-                print("Total feature vectors generated so far:", dataset.shape[0])
+                print("\nTotal feature vectors generated so far:", dataset.shape[0])
 
             feature_vecs = np.vstack(dataset["feature_vec"])
             feature_vecs = self.standardize_and_reduce_dim(feature_vecs)
             dataset["feature_vec"] = list(feature_vecs)
 
             dataset.reset_index(drop=True, inplace=True)
-            dataset.to_pickle("dataset.pkl")
+            dataset.to_pickle("cache/dataset.pkl")
             self.dataset = dataset
 
-    # Called once in the beginning only and during tests
     def load_or_process_labeled_dataset(self, from_file_id=None):
-        if from_file_id==None and os.path.isfile("dataset_labeled.pkl"):
-            return pd.read_pickle("dataset_labeled.pkl")
+        if from_file_id==None and os.path.isfile("cache/dataset_labeled.pkl"):
+            return pd.read_pickle("cache/dataset_labeled.pkl")
         else:
             columns = ["feature_vec", "file_id", "start", "end", "label"]
             if from_file_id:
@@ -84,10 +82,10 @@ class DataSource:
             labels = []
             for range_type in range(0,2):
                 if range_type == 0:
-                    print("Reading non-HR segments")
+                    print("Reading negative segments")
                     range_file = "data/negative_ranges.csv"
                 else:
-                    print("Reading HR segments")
+                    print("Reading positive segments")
                     range_file = "data/positive_ranges.csv"
 
                 ranges = pd.read_csv(
@@ -133,28 +131,28 @@ class DataSource:
             dataset = dataset.reindex(np.random.permutation(dataset.index))
 
             if from_file_id==None:
-                dataset.to_pickle("dataset_labeled.pkl")
+                dataset.to_pickle("cache/dataset_labeled.pkl")
             return dataset
 
     def standardize_and_reduce_dim(self, features, labels=None):
         if self.pca == None:
-            if os.path.isfile("pca.pkl") == False:
+            if os.path.isfile("cache/pca.pkl") == False:
                 pca = PCA(n_components=self.pca_n_components, whiten=True)
                 pca = pca.fit(features, labels)
-                joblib.dump(pca, 'pca.pkl') 
+                joblib.dump(pca, "cache/pca.pkl") 
             else:
                 print("load PCA params")
-                pca = joblib.load('pca.pkl') 
+                pca = joblib.load("cache/pca.pkl") 
             self.pca = pca
         features = self.pca.transform(features)
 
         if self.scaler == None:
-            if os.path.isfile("scaler.pkl") == False:
+            if os.path.isfile("cache/scaler.pkl") == False:
                 scaler = preprocessing.StandardScaler().fit(features)
-                joblib.dump(scaler, 'scaler.pkl') 
+                joblib.dump(scaler, "cache/scaler.pkl") 
             else:
                 print("load scaler")
-                scaler = joblib.load("scaler.pkl")
+                scaler = joblib.load("cache/scaler.pkl")
             self.scaler = scaler
         features = self.scaler.transform(features)
 
@@ -162,49 +160,63 @@ class DataSource:
 
     def display_dataset(self, dataset):
         num_figures = 3
-        num_figure_subplots = 10
+        num_figure_subplots = 5
         for k in range(num_figures):
-            print("figure id:", self.figure_id)
             plt.figure(self.figure_id)
             for i in range(num_figure_subplots):
                 e = dataset.iloc[k*num_figure_subplots + i]
 
-                # remove this - just for testing
                 if "signal" not in e:
                     dd = self.read_data_from_file(e.file_id)
                     segment = dd.iloc[int(e.start):int(e.end)]
                     e.signal = Signal(segment["ppg"].values, segment["timestamp"].values)
                 
-                signal = e.signal
+                signal = preprocessing.scale(e.signal.highpass_filter(1))
+                signal_filtered = preprocessing.scale(e.signal.bandpass_filter(0.8, 2.5))
 
-                signal_filtered = signal.bandpass_filter(0.8, 2.5)
+                start_time = pd.Timestamp(e.signal.timestamp_in_datetime(0))
+                end_time = pd.Timestamp(e.signal.timestamp_in_datetime(-1))
+                t = np.linspace(start_time.value, end_time.value, self.timestep_size)
+                t = pd.to_datetime(t)
 
-                signal_scaled = preprocessing.scale(signal.bandpass_filter(0.1, 20))
-                signal_filtered_scaled = preprocessing.scale(signal_filtered)
+                ax = plt.subplot(num_figure_subplots,1,i+1)
 
-                ax = plt.subplot(10,2,2*i+1)
+                # Display the true label or prediction on the plot
+                if False:
+                    if "label" in e:
+                        printout = e.label
+                    else:
+                        printout = e.pred
+                    ax.text(0.5, 0.5, printout,
+                        horizontalalignment='center',
+                        verticalalignment='top',
+                        transform=ax.transAxes,
+                        fontsize=12)
 
-                #remove this - just for testing
-                if "label" in e:
-                    printout = e.label
-                else:
-                    printout = e.pred
-                ax.text(0.5, 0.5, printout,
-                horizontalalignment='center',
-                verticalalignment='top',
-                transform=ax.transAxes,
-                fontsize=12)
-
-                ax.plot(signal_scaled)
-                ax.plot(signal_filtered_scaled, color='r')
-
-                peaks = scipy.signal.find_peaks_cwt(signal_filtered_scaled, np.arange(5,10))
-                ax.plot(peaks, signal_filtered_scaled[peaks], marker='o', linestyle="None")
-
-                ax = plt.subplot(10,2,2*i+2)
-                ax.plot(e.feature_vec)
-                print("%d,%d,%d" %(int(e.file_id), int(e.start), int(e.end)))
+                ax.plot(t, signal)
+                ax.plot(t, signal_filtered, color='r')
+                ax.xaxis_date()
+                ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
+                ax.yaxis.set_visible(False)
 
             plt.show()
             #plt.savefig('plots/plot%d.png' % self.figure_id)
             self.figure_id += 1
+
+    def confusion(self, dataset):
+        preds = np.rint(dataset.pred.values)
+        labels = dataset.label
+        cnf_matrix = confusion_matrix(labels, preds)
+        np.set_printoptions(precision=2)
+        plt.figure()
+        plot_confusion_matrix(cnf_matrix, classes=["Positive","Negative"], title='')
+
+    def remove_labeled_subset_from_dataset(self, labeled_ds):
+        for i in range(labeled_ds.shape[0]):
+            file_id = labeled_ds.iloc[i]["file_id"]
+            start = labeled_ds.iloc[i]["start"] 
+            end = labeled_ds.iloc[i]["end"]
+            self.dataset = self.dataset[~((self.dataset.file_id == file_id) & 
+                                    (self.dataset.start == start) & 
+                                    (self.dataset.end == end))]
+        self.dataset.reset_index(drop=True, inplace=True)

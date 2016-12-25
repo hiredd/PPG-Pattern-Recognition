@@ -9,19 +9,16 @@ import detect_peaks
 from sklearn import preprocessing
 import matplotlib.pyplot as plt
 from peakutils.peak import indexes
-import pywt
-
-# Separate this file into Signal (parent class), HRSignal, and AccSignal
-# and put ad hoc methods in each of those classes
 
 class Signal:
 
     def __init__(self, signal, timestamps, fs = 80):
+        self.timestamps = np.array(timestamps)
+        self.sample_freq = fs
         self.content = np.array(signal)
         self.correct_saturation()
         self.remove_outliers()
-        self.timestamps = np.array(timestamps)
-        self.sample_freq = fs
+        self.content = self.highpass_filter(1)
 
     def length(self):
         return np.shape(self.content)[0]
@@ -64,32 +61,19 @@ class Signal:
         return feature_vector
 
 
-    def extract_PSD_features(self, start=None, end=None):
-        #(cA, cD) = pywt.dwt(self.content, 'db3')
-        #cA2, cD5, cD4, cD3, cD2, cD1 = pywt.wavedec(self.content, 'db3', level=5)
+    def extract_PSD_features(self):
+        freqs, psd = self.log_PSD()
+        startf = self.i_freq(freqs, 1)
+        endf = self.i_freq(freqs, 2.5)+1
 
-        ### I just modified
-        s_low_f_filtered, s_low_psd_filtered = self.log_PSD()
-        return s_low_psd_filtered
-
-        # if start == None or end == None:
-        #     filtered_signal = self.bandpass_filter(0.5, 2.5)
-        #     filtered_signal = self.content
-        # else:
-        #     filtered_signal = self.bandpass_filter(0.5, 2.5, start, end)
-        #     filtered_signal = self.content[start:end]
-        # s_low = Signal(filtered_signal, self.timestamps)
-        # s_low_f_filtered, s_low_psd_filtered = s_low.log_PSD()
-
-        # if start == None or end == None:
-        #     filtered_signal = self.bandpass_filter(13, 39)
-        # else:
-        #     filtered_signal = self.bandpass_filter(13, 39, start, end)
-
-        # s_high = Signal(filtered_signal, self.timestamps)
-        # s_high_f_filtered, s_high_psd_filtered = s_high.log_PSD()
-
-        return s_low_psd_filtered
+        # For classification, we don't care about the PPG
+        # frequency, just that it's in a normal human range,
+        # so take the mean of that frequency range.
+        a = np.array([psd[0]]) 
+        b = np.array([np.mean(psd[startf:endf])]) 
+        c = psd[4:]
+        psd = np.concatenate([a,b,c])
+        return psd
 
 
     # Correct signal saturation (defined as sharp slope in curve) 
@@ -108,6 +92,12 @@ class Signal:
             if signal_diff[k] < -1*max_slope:
                 # Pull subsequent values up
                 self.content[k+1:signal_diff_end] = self.content[k+1:signal_diff_end] + max_val
+
+    def highpass_filter(self, cutoff, order=2):
+        nyq = 0.5 * self.sample_freq
+        cutoff = cutoff / nyq
+        b, a = butter(order, cutoff, btype='highpass', analog=False)
+        return filtfilt(b, a, self.content.tolist())
 
     def bandpass_filter(self, cutoff_low, cutoff_high, start=None, end=None, order=2):
         nyq = 0.5 * self.sample_freq
