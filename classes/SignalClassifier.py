@@ -1,22 +1,17 @@
 import numpy as np
-import pandas as pd
 from sklearn.externals import joblib
 from sklearn.model_selection import train_test_split
 from sklearn import preprocessing, svm
-from sklearn.metrics import confusion_matrix
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
-import scipy
 import tensorflow as tf
 import os.path
 import itertools
-from keras.models import Sequential, load_model
+from keras.models import Sequential
 from keras.layers import Dense, Dropout
-from keras.regularizers import l2, activity_l2
 from keras.optimizers import Adam
-from keras.callbacks import EarlyStopping, TensorBoard
 from keras.utils import np_utils
-from keras.callbacks import Callback
+from keras.regularizers import l2, activity_l2
 import keras.backend as K
 import matplotlib.pyplot as plt
 from classes.Signal import Signal
@@ -56,10 +51,9 @@ class SignalClassifier:
         train_x, test_x, train_y, test_y = train_test_split(train_x, train_y, test_size=0.2)
 
         kmeans = KMeans(n_clusters=1).fit(train_x, train_y)
-        #print("kmeans", np.sum(abs(np.array(kmeans.predict(test_x))-np.array(test_y)))/test_y.shape[0])
         print("kmeans", kmeans.score(train_x, train_y))
 
-    def nn_batch_train(self, dataset, num_epochs=1, verbose=False):
+    def train(self, dataset, num_epochs=1, verbose=False):
         train_x = np.vstack(dataset["feature_vec"])
         train_y = self.one_hot_encode(dataset["label"].values)
 
@@ -79,10 +73,8 @@ class SignalClassifier:
 
     def pred_and_sort(self, dataset):
         train_x = np.vstack(dataset["feature_vec"])
-
         y_predicted = self.model.predict_proba(train_x)[:,1]
         dataset["pred"] = list(y_predicted)
-
         # Get the most confidently predicted features
         data_sorted_by_preds = dataset.sort_values(["pred"], ascending=False)
         return data_sorted_by_preds
@@ -91,6 +83,8 @@ class SignalClassifier:
         plt.figure()
         ax = plt.subplot(1,1,1)
         ax.plot(self.losses, color='black')
+        ax.set_xlabel('Epoch')
+        ax.set_ylabel('Loss')
         plt.show()
 
     def one_hot_encode(self, y):

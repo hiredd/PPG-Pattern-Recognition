@@ -5,6 +5,7 @@ import pandas as pd
 from classes.Signal import Signal
 from classes.DataSource import DataSource
 from classes.SignalClassifier import SignalClassifier
+import matplotlib.pyplot as plt
 
 ds = DataSource()
 # Load initial labeled training set T
@@ -23,7 +24,7 @@ num_batches = 10
 batch = 1
 # Train on T
 print("Batch %d/%d" % (batch, num_batches))
-c.nn_batch_train(labeled_ds, num_epochs=10) 
+c.train(labeled_ds, num_epochs=10) 
 
 while batch<num_batches:
     batch+=1
@@ -32,7 +33,7 @@ while batch<num_batches:
     
     qty = 100
     if ds.dataset.shape[0] < qty*2:
-        break # we reached end of dataset
+        break # reached end of dataset
 
     # Extract the most confidently classified new features T from P
     most_confident_samples = pd.concat([ds.dataset.iloc[:qty], 
@@ -44,11 +45,11 @@ while batch<num_batches:
     ds.dataset.drop(samples_to_drop, inplace=True)
 
     # Generate labels based on predictions
-    labels = np.concatenate([np.ones(qty), np.zeros(qty)])
+    labels = np.rint(most_confident_samples.pred)
     most_confident_samples["label"] = list(labels)
 
     print("\r\nBatch %d/%d" % (batch, num_batches))
-    c.nn_batch_train(most_confident_samples, num_epochs=4)
+    c.train(most_confident_samples, num_epochs=4)
 
 # Evaluate
 test_ds = ds.load_or_process_labeled_dataset(from_file_id=20)
@@ -62,5 +63,20 @@ print(results)
 test_ds = c.pred_and_sort(test_ds)
 ds.confusion(test_ds)
 c.plot_losses()
-# Uncomment for plots of most confidently predicted segments
+# Plot a few of the most confidently predicted segments
 ds.display_dataset(test_ds)
+
+fig = plt.figure(1)
+ax = fig.add_subplot(111)
+for i in range(10):
+    s = test_ds.iloc[i].signal
+    f, psd = s.log_PSD()
+    ax.plot(f, psd, color='blue')
+
+    s = test_ds.iloc[-i-1].signal
+    f, psd = s.log_PSD()
+    ax.plot(f, psd, color='red')
+
+    ax.set_xlabel('Frequency [Hz]')
+    ax.set_ylabel('Power [W/Hz]')
+plt.show()

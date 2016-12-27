@@ -1,8 +1,9 @@
-# Take one data file, extract 512-long segments from it,
-# for each segment, extract the 3 features, then sort the
-# resulting feature array from the whole file by those 3 features
-# using a minimizing overall function. plot the signal for the
-# times that correspond to the maximum features
+# Script used to label the dataset files (data/data*.csv), call using the -h
+# option for information. 
+
+# The program extracts preliminary features from the data, then sorts the
+# results by feature importance and plots them in batches. Segments can be 
+# labeled by clicking on subplots.
 
 import sys
 import numpy as np
@@ -73,7 +74,7 @@ labeled_ds_neg = pd.read_csv('data/negative_ranges.csv',
                         names=["file_id", "start", "end"])
 
 step = 256
-offset = 128
+offset = 0
 start, end = offset, dataset.shape[0]
 features = []
 while start+step < end:
@@ -89,27 +90,6 @@ columns = ["mean_HF", "HF/LF", "VLF/LF", "peak_var", "signal", "start", "end"]
 sort_column_order = [columns[i] for i in [2,1,3,0]]
 features = pd.DataFrame(features, columns=columns).sort_values(sort_column_order, ascending=True)
 
-'''
-df = pd.read_csv("data/HR_ranges.csv")
-
-review = True
-label_non_HR = False
-
-if label_non_HR:
-    # Randomize (for validation)
-    features.reindex(np.random.permutation(features.index))
-
-    for i in range(500):
-        if i >= features.shape[0]:
-            break
-        feat = features.iloc[i]
-        start, end = int(feat[4]), int(feat[5])
-        if df.isin([FILE_ID, start, end]).all(1).any() == False:
-            range_ids = pd.DataFrame([[FILE_ID, start, end]])
-            range_ids.to_csv('data/non_HR_ranges.csv', mode='a', header=False, index=False)
-    quit()
-'''
-
 num_figure_subplots = 30
 counter = 0
 k = 0
@@ -122,8 +102,8 @@ while num_figure_subplots*k < features.shape[0] and k < 100:
         start = feat.start
         end = feat.end
 
-        signal_without_outliers = signal.bandpass_filter(1, 35)
-        signal_filtered = signal.bandpass_filter(0.8, 2.5)
+        signal = preprocessing.scale(signal.highpass_filter(1))
+        signal_filtered = preprocessing.scale(signal.bandpass_filter(0.8, 2.5))
 
         start_time = pd.Timestamp(signal.timestamp_in_datetime(0))
         end_time = pd.Timestamp(signal.timestamp_in_datetime(-1))
@@ -153,13 +133,11 @@ while num_figure_subplots*k < features.shape[0] and k < 100:
                          "used":used,
                          "figure_id":k+1})
 
-        ax.plot(t, preprocessing.scale(signal_without_outliers), alpha=alpha)
+        ax.plot(t, preprocessing.scale(signal), alpha=alpha)
         ax.plot(t, preprocessing.scale(signal_filtered), color='r', alpha=alpha)
         ax.xaxis_date()
         ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
         ax.yaxis.set_visible(False)
-
-        #fig.autofmt_xdate()
 
     cid = fig.canvas.mpl_connect('button_press_event', onclick)
     figManager = plt.get_current_fig_manager()

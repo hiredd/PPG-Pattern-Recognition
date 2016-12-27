@@ -3,6 +3,7 @@ import scipy
 import pandas as pd
 import os
 import itertools
+import argparse
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from sklearn import preprocessing
@@ -14,15 +15,21 @@ from classes.Signal import Signal
 
 class DataSource:
 
+    test_set_file = 20
     timestep_size = 256
     dataset = None
     scaler = None
     pca = None
     figure_id = 1
 
-    def __init__(self, num_labeled_records=512, pca_n_components=30):
+    def __init__(self, num_labeled_records=500, pca_n_components=10):
         self.num_labeled_records=num_labeled_records
         self.pca_n_components = pca_n_components
+
+        parser = argparse.ArgumentParser()
+        parser.add_argument('--regenerate', action='store_true')
+        args = parser.parse_args()
+        self.should_regenerate_feature_files = args.regenerate
 
     def read_data_from_file(self, file_id):
         data = pd.read_csv(
@@ -38,12 +45,14 @@ class DataSource:
         return data
 
     def load_or_process_entire_dataset(self):
-        if os.path.isfile("cache/dataset.pkl"):
+        if os.path.isfile("cache/dataset.pkl") and self.should_regenerate_feature_files==False:
             self.dataset = pd.read_pickle("cache/dataset.pkl")
         else:
             columns = ["feature_vec", "file_id", "start", "end", "pred"]
             dataset = pd.DataFrame(columns=columns)
-            for file_id in range(0,20):
+            for file_id in range(0,21):
+                if file_id == self.test_set_file:
+                    continue
                 data = self.read_data_from_file(file_id)
                 print("Processing file data%d.csv" % file_id, end='')
                 start = 0
@@ -71,7 +80,9 @@ class DataSource:
             self.dataset = dataset
 
     def load_or_process_labeled_dataset(self, from_file_id=None):
-        if from_file_id==None and os.path.isfile("cache/dataset_labeled.pkl"):
+        if from_file_id==None and \
+           os.path.isfile("cache/dataset_labeled.pkl") and \
+           self.should_regenerate_feature_files==False:
             return pd.read_pickle("cache/dataset_labeled.pkl")
         else:
             columns = ["feature_vec", "file_id", "start", "end", "label"]
@@ -82,10 +93,10 @@ class DataSource:
             labels = []
             for range_type in range(0,2):
                 if range_type == 0:
-                    print("Reading negative segments")
+                    print("Reading negative-labeled segments")
                     range_file = "data/negative_ranges.csv"
                 else:
-                    print("Reading positive segments")
+                    print("Reading positive-labeled segments")
                     range_file = "data/positive_ranges.csv"
 
                 ranges = pd.read_csv(
@@ -96,7 +107,7 @@ class DataSource:
                     ranges = ranges[ranges["file_id"] == from_file_id]
                 else:
                     # Reject test set samples
-                    ranges = ranges[ranges["file_id"] != 20.0]
+                    ranges = ranges[ranges["file_id"] != self.test_set_file + 0.0]
                     # Take {num_labeled_records} random samples
                     ranges = ranges.reindex(np.random.permutation(ranges.index))
                     ranges = ranges.iloc[:self.num_labeled_records]
@@ -136,7 +147,7 @@ class DataSource:
 
     def standardize_and_reduce_dim(self, features, labels=None):
         if self.pca == None:
-            if os.path.isfile("cache/pca.pkl") == False:
+            if os.path.isfile("cache/pca.pkl") == False or self.should_regenerate_feature_files:
                 pca = PCA(n_components=self.pca_n_components, whiten=True)
                 pca = pca.fit(features, labels)
                 joblib.dump(pca, "cache/pca.pkl") 
@@ -147,7 +158,7 @@ class DataSource:
         features = self.pca.transform(features)
 
         if self.scaler == None:
-            if os.path.isfile("cache/scaler.pkl") == False:
+            if os.path.isfile("cache/scaler.pkl") == False or self.should_regenerate_feature_files:
                 scaler = preprocessing.StandardScaler().fit(features)
                 joblib.dump(scaler, "cache/scaler.pkl") 
             else:
@@ -160,11 +171,15 @@ class DataSource:
 
     def display_dataset(self, dataset):
         num_figures = 3
-        num_figure_subplots = 5
+        num_figure_subplots = 2
         for k in range(num_figures):
             plt.figure(self.figure_id)
             for i in range(num_figure_subplots):
                 e = dataset.iloc[k*num_figure_subplots + i]
+                if i==1:
+                    e = dataset.iloc[-200]
+                else:
+                    e = dataset.iloc[100]
 
                 if "signal" not in e:
                     dd = self.read_data_from_file(e.file_id)

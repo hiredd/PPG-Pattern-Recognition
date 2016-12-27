@@ -20,17 +20,6 @@ class Signal:
         self.remove_outliers()
         self.content = self.highpass_filter(1)
 
-    def length(self):
-        return np.shape(self.content)[0]
-
-    def i_freq(self, lf, frequency):
-        i = 0
-        while lf[i] < frequency:
-            i += 1
-        if i == 0:
-            return 0
-        return i-1
-
     def extract_features(self, validate_HR_range=True):
         feature_vector = []
 
@@ -60,30 +49,24 @@ class Signal:
 
         return feature_vector
 
-
     def extract_PSD_features(self):
         freqs, psd = self.log_PSD()
+        # For classification, we don't care about the PPG frequency, just that 
+        # it's in a normal human range, so take the mean of that frequency range.
         startf = self.i_freq(freqs, 1)
         endf = self.i_freq(freqs, 2.5)+1
-
-        # For classification, we don't care about the PPG
-        # frequency, just that it's in a normal human range,
-        # so take the mean of that frequency range.
         a = np.array([psd[0]]) 
         b = np.array([np.mean(psd[startf:endf])]) 
         c = psd[4:]
         psd = np.concatenate([a,b,c])
         return psd
 
-
-    # Correct signal saturation (defined as sharp slope in curve) 
-    # by scaling subsequent readings by the maximum range
-    # Params, Return: list of PPG readings (floats)
+    # Correct signal saturation by scaling readings by the maximum amplitude.
     def correct_saturation(self):
         max_val = np.max(self.content)
         signal_diff = np.diff(self.content)
         signal_diff_end = len(signal_diff)-1
-        max_slope = 50000
+        max_slope = 50000 # saturation (positive or negative)
         
         for k in range(len(signal_diff)):
             if signal_diff[k] > max_slope:
@@ -99,50 +82,30 @@ class Signal:
         b, a = butter(order, cutoff, btype='highpass', analog=False)
         return filtfilt(b, a, self.content.tolist())
 
-    def bandpass_filter(self, cutoff_low, cutoff_high, start=None, end=None, order=2):
+    def bandpass_filter(self, cutoff_low, cutoff_high, order=2):
         nyq = 0.5 * self.sample_freq
         normal_cutoff_low = cutoff_low / nyq
         normal_cutoff_high = cutoff_high / nyq
         b, a = butter(order, [normal_cutoff_low, normal_cutoff_high], btype='bandpass', analog=False)
+        return filtfilt(b, a, self.content.tolist())
 
-        if start==None and end==None:
-            return filtfilt(b, a, self.content.tolist())
-        else:
-            return filtfilt(b, a, self.content[start:end].tolist())
-
-
-    # Filter outliers using a moving median filter
+    # Moving median filter
     def remove_outliers(self, window = 3):
         self.content = np.array(medfilt(self.content.tolist(), window))
 
-
-    # Log power spectral density of the signal segment (used as a feature)
-    # Input:
-    #   * start (int), end (int): indeces of signal segment range
-    #   * sample_window (int): length of overlapping segments for pwelch averaging
-    # Output:
-    #   Tuple of frequency spectrum list and corresponding scaled log base 10
-    #   of the PSD of the signal segment start-end
-    def log_PSD(self, start = None, end = None, sample_window = 128):
-        if start == None:
-            start = 0
-        if end == None:
-            end = len(self.content)
-        segment = self.content[start:end].tolist()
+    # Log power spectral density of the signal segment
+    # *Input: sample_window (int): length of overlapping segments for pwelch averaging
+    # *Output: Tuple of frequency spectrum list and corresponding scaled log base 10
+    # of the PSD of the signal segment start-end
+    def log_PSD(self, sample_window = 128):
+        segment = self.content
         f, psd = welch(segment, fs = self.sample_freq, nperseg = sample_window)
         return f, np.log10(psd)
 
-    def fft(self, length = None):
-        if length == None:
-            return fft(self.content)
-        return fft(self.content, length)
-
-    # Calculate the heart rate number from number of peaks and start:end timeframe 
+    # Calculate the heart rate and the beat variance 
     def get_BPM_and_peak_variance(self):
         # Focus on standard HR frequency range
         segment = self.bandpass_filter(0.8, 2.5)
-
-        # Find the segment peaks' indices for peak occurrence variance feature.
         indices = detect_peaks.detect_peaks(segment, mph = 50)
 
         peak_variance = np.finfo(np.float32).max
@@ -162,3 +125,15 @@ class Signal:
         except ValueError:
             timestamp = datetime.strptime(self.timestamps[timestamp_id], '%Y-%m-%d %H:%M:%S')
         return timestamp
+
+    def length(self):
+        return np.shape(self.content)[0]
+
+    # Return index of the closest frequency in the given frequency range
+    def i_freq(self, frequency_range_list, frequency):
+        i = 0
+        while i < len(frequency_range_list) and frequency_range_list[i] < frequency:
+            i += 1
+        if i == 0:
+            return 0
+        return i-1
