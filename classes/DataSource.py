@@ -171,15 +171,11 @@ class DataSource:
 
     def display_dataset(self, dataset):
         num_figures = 3
-        num_figure_subplots = 2
+        num_figure_subplots = 5
         for k in range(num_figures):
             plt.figure(self.figure_id)
             for i in range(num_figure_subplots):
                 e = dataset.iloc[k*num_figure_subplots + i]
-                if i==1:
-                    e = dataset.iloc[-200]
-                else:
-                    e = dataset.iloc[100]
 
                 if "signal" not in e:
                     dd = self.read_data_from_file(e.file_id)

@@ -65,18 +65,3 @@ ds.confusion(test_ds)
 c.plot_losses()
 # Plot a few of the most confidently predicted segments
 ds.display_dataset(test_ds)
-
-fig = plt.figure(1)
-ax = fig.add_subplot(111)
-for i in range(10):
-    s = test_ds.iloc[i].signal
-    f, psd = s.log_PSD()
-    ax.plot(f, psd, color='blue')
-
-    s = test_ds.iloc[-i-1].signal
-    f, psd = s.log_PSD()
-    ax.plot(f, psd, color='red')
-
-    ax.set_xlabel('Frequency [Hz]')
-    ax.set_ylabel('Power [W/Hz]')
-plt.show()
