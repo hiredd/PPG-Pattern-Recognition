@@ -7,6 +7,7 @@ Main dependencies: Tensorflow/Theano, Keras, scikit-learn.
 
 Clone the repo and call main.py with no arguments to train the model and visualize plots of the confusion matrix, loss over epochs, and a few example segments demonstrating the classifier results, as shown below. Note: the code was written and tested in Python 3.
 
-<img src="plots/signal_comparison.png" alt="" width="600" style="display: block; margin: 0px auto;" />
-
+<p align="center">
+<img src="plots/signal_comparison.png" alt="" width="600" />
+</p>
 *Comparison of two types of labeled signals from the dataset, showing the original signal in blue, and a bandpass filtered version in red. Above: segment with high quality signal content, labeled positive. Below: segment content is random and should be rejected, labeled negative.*
