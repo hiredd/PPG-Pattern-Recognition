@@ -1,5 +1,7 @@
 # Semi-supervised pattern recognition in PPG signals
+
 **Please refer to the blog post for more information on this project if you are new.**
+
 The purpose of this tutorial is to present self-training as a viable semi-supervised approach for regular pattern recognition in physiological signals, specifically using PPG or pulse oximetry, with only a few pre-labeled examples. The trained model can be applied during the signal pre-processing stage to distinguish relatively clean segments from ones affected by substantial noise and/or motion artifacts. It can achieve an observed accuracy as high as 94.7% using a limited initial training subset of 500 labels, and shows a performance increase compared to a 91% accuracy with a fully supervised model trained against the entire available labeled subset.
 
 ## Code and usage
