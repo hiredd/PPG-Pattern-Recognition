@@ -22,7 +22,8 @@ class DataSource:
     pca = None
     figure_id = 1
 
-    def __init__(self, num_labeled_records=500, pca_n_components=10):
+    def __init__(self, data_type="psd", 
+        num_labeled_records=500, pca_n_components=10):
         self.num_labeled_records=num_labeled_records
         self.pca_n_components = pca_n_components
 
@@ -30,6 +31,7 @@ class DataSource:
         parser.add_argument('--regenerate', action='store_true')
         args = parser.parse_args()
         self.should_regenerate_feature_files = args.regenerate
+        self.data_type = data_type
 
     def read_data_from_file(self, file_id):
         data = pd.read_csv(
@@ -45,8 +47,9 @@ class DataSource:
         return data
 
     def load_or_process_entire_dataset(self):
-        if os.path.isfile("cache/dataset.pkl") and self.should_regenerate_feature_files==False:
-            self.dataset = pd.read_pickle("cache/dataset.pkl")
+        if os.path.isfile("cache/dataset_%s.pkl" % self.data_type) and \
+            self.should_regenerate_feature_files==False:
+            self.dataset = pd.read_pickle("cache/dataset_%s.pkl" % self.data_type)
         else:
             columns = ["feature_vec", "file_id", "start", "end", "pred"]
             dataset = pd.DataFrame(columns=columns)
@@ -63,7 +66,13 @@ class DataSource:
                         print(".", sep=' ', end='', flush=True)
                     segment = data.iloc[start:start+step]
                     signal = Signal(segment["ppg"].values, segment["timestamp"].values)
-                    dataset = dataset.append(pd.DataFrame([[signal.extract_PSD_features(),
+
+                    if self.data_type == "psd":
+                        formatted_data = signal.extract_PSD_features()
+                    else:
+                        formatted_data = signal.bandpass_filter(0.8, 15)
+
+                    dataset = dataset.append(pd.DataFrame([[formatted_data,
                                      file_id,
                                      start,
                                      start+step,
@@ -76,14 +85,14 @@ class DataSource:
             dataset["feature_vec"] = list(feature_vecs)
 
             dataset.reset_index(drop=True, inplace=True)
-            dataset.to_pickle("cache/dataset.pkl")
+            dataset.to_pickle("cache/dataset_%s.pkl" % self.data_type)
             self.dataset = dataset
 
     def load_or_process_labeled_dataset(self, from_file_id=None):
         if from_file_id==None and \
-           os.path.isfile("cache/dataset_labeled.pkl") and \
+           os.path.isfile("cache/dataset_labeled_%s.pkl" % self.data_type) and \
            self.should_regenerate_feature_files==False:
-            return pd.read_pickle("cache/dataset_labeled.pkl")
+            return pd.read_pickle("cache/dataset_labeled_%s.pkl" % self.data_type)
         else:
             columns = ["feature_vec", "file_id", "start", "end", "label"]
             if from_file_id:
@@ -122,7 +131,12 @@ class DataSource:
                         segment = data.iloc[start:end]
                         signal = Signal(segment["ppg"].values, segment["timestamp"].values)
 
-                        dataset_entry = [signal.extract_PSD_features(),
+                        if self.data_type == "psd":
+                            formatted_data = signal.extract_PSD_features()
+                        else:
+                            formatted_data = signal.bandpass_filter(0.8, 15)
+
+                        dataset_entry = [formatted_data,
                                          file_id,
                                          start,
                                          end,
@@ -142,28 +156,29 @@ class DataSource:
             dataset = dataset.reindex(np.random.permutation(dataset.index))
 
             if from_file_id==None:
-                dataset.to_pickle("cache/dataset_labeled.pkl")
+                dataset.to_pickle("cache/dataset_labeled_%s.pkl" % self.data_type)
             return dataset
 
     def standardize_and_reduce_dim(self, features, labels=None):
-        if self.pca == None:
-            if os.path.isfile("cache/pca.pkl") == False or self.should_regenerate_feature_files:
-                pca = PCA(n_components=self.pca_n_components, whiten=True)
-                pca = pca.fit(features, labels)
-                joblib.dump(pca, "cache/pca.pkl") 
-            else:
-                print("load PCA params")
-                pca = joblib.load("cache/pca.pkl") 
-            self.pca = pca
-        features = self.pca.transform(features)
+        if self.data_type == "psd":
+            if self.pca == None:
+                if os.path.isfile("cache/pca.pkl") == False or self.should_regenerate_feature_files:
+                    pca = PCA(n_components=self.pca_n_components, whiten=True)
+                    pca = pca.fit(features, labels)
+                    joblib.dump(pca, "cache/pca.pkl") 
+                else:
+                    print("load PCA params")
+                    pca = joblib.load("cache/pca.pkl") 
+                self.pca = pca
+            features = self.pca.transform(features)
 
         if self.scaler == None:
-            if os.path.isfile("cache/scaler.pkl") == False or self.should_regenerate_feature_files:
+            if os.path.isfile("cache/scaler_%s.pkl" % self.data_type) == False or self.should_regenerate_feature_files:
                 scaler = preprocessing.StandardScaler().fit(features)
-                joblib.dump(scaler, "cache/scaler.pkl") 
+                joblib.dump(scaler, "cache/scaler_%s.pkl" % self.data_type) 
             else:
                 print("load scaler")
-                scaler = joblib.load("cache/scaler.pkl")
+                scaler = joblib.load("cache/scaler_%s.pkl" % self.data_type)
             self.scaler = scaler
         features = self.scaler.transform(features)
 

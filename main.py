@@ -7,7 +7,17 @@ from classes.DataSource import DataSource
 from classes.SignalClassifier import SignalClassifier
 import matplotlib.pyplot as plt
 
-ds = DataSource()
+RECURRENT = 0
+FEEDFORWARD = 1
+
+model_type = RECURRENT
+
+if model_type == FEEDFORWARD:
+    data_type = "psd"
+else: 
+    data_type = "timeseries"
+
+ds = DataSource(data_type)
 # Load initial labeled training set T
 labeled_ds = ds.load_or_process_labeled_dataset()
 # Load entire (unlabeled) data set P
@@ -18,7 +28,7 @@ ds.remove_labeled_subset_from_dataset(labeled_ds)
 # Initialize model
 c = SignalClassifier()
 input_dim = len(labeled_ds.feature_vec.iloc[0])
-c.init_nn_model(input_dim=input_dim)
+c.init_nn_model(model_type, input_dim=input_dim)
 
 num_batches = 10
 batch = 1
